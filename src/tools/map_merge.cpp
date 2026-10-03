@@ -324,7 +324,6 @@ bool Process(IStorage *pStorage, char *pOutName, char **pMapNames, int NumMaps)
 	mem_zero(pSpeedupTiles, MaxMapWidth * MaxMapHeight * sizeof(CSpeedupTile));
 
 	int NumImages = 0;
-	int NumSounds = 0;
 
 	std::vector<SMapImage> MapImages;
 	std::vector<CEnvPoint> EnvPoints;
@@ -587,12 +586,12 @@ bool Process(IStorage *pStorage, char *pOutName, char **pMapNames, int NumMaps)
 										if(pThisTile->m_Index == 86 || pThisTile->m_Index == 93 || pThisTile->m_Index == 214)
 											pThisTile->m_Index -= 52;
 
-										if(pThisTile->m_Index >= 99 && pThisTile->m_Index <= 101 ||
-											pThisTile->m_Index >= 115 && pThisTile->m_Index <= 117 ||
-											pThisTile->m_Index >= 106 && pThisTile->m_Index <= 108 ||
-											pThisTile->m_Index >= 122 && pThisTile->m_Index <= 124 ||
-											pThisTile->m_Index >= 227 && pThisTile->m_Index <= 229 ||
-											pThisTile->m_Index >= 243 && pThisTile->m_Index <= 245)
+										if((pThisTile->m_Index >= 99 && pThisTile->m_Index <= 101) ||
+											(pThisTile->m_Index >= 115 && pThisTile->m_Index <= 117) ||
+											(pThisTile->m_Index >= 106 && pThisTile->m_Index <= 108) ||
+											(pThisTile->m_Index >= 122 && pThisTile->m_Index <= 124) ||
+											(pThisTile->m_Index >= 227 && pThisTile->m_Index <= 229) ||
+											(pThisTile->m_Index >= 243 && pThisTile->m_Index <= 245))
 											pThisTile->m_Index -= 32;
 									}
 							}
@@ -650,7 +649,7 @@ bool Process(IStorage *pStorage, char *pOutName, char **pMapNames, int NumMaps)
 									}
 								}
 						}
-						free(pLayer);
+						delete pLayer;
 					};
 				}
 				else if(pLayerItem->m_Type == LAYERTYPE_QUADS)

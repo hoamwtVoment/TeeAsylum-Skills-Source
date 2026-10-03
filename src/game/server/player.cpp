@@ -357,12 +357,6 @@ void CPlayer::Tick()
 
 	if(Instance.m_Init && !Instance.m_pController->IsGamePaused())
 	{
-		if(!m_pCharacter && IsSpectating() && m_SpecMode == SPEC_FREEVIEW)
-			m_ViewPos -= vec2(clamp(m_ViewPos.x - m_LatestActivity.m_TargetX, -500.0f, 500.0f), clamp(m_ViewPos.y - m_LatestActivity.m_TargetY, -400.0f, 400.0f));
-
-		if(!m_pCharacter && IsSpectating() && m_SpecMode == SPEC_FREEVIEW)
-			m_ViewPos -= vec2(clamp(m_ViewPos.x - m_LatestActivity.m_TargetX, -500.0f, 500.0f), clamp(m_ViewPos.y - m_LatestActivity.m_TargetY, -400.0f, 400.0f));
-
 		if(!m_pCharacter && m_DieTick + Server()->TickSpeed() * 3 <= Server()->Tick() && !m_DeadSpecMode)
 			Respawn();
 
