@@ -11,12 +11,14 @@ jobs:
         os: [ubuntu-24.04, windows-2022]
         include:
         - os: ubuntu-24.04
-          package-file: DDNet-Server
+          build-file: DDNet-Server
+          server-file: TeeAsylum-Server
           env:
             CFLAGS: -Wdeclaration-after-statement -Werror
             CXXFLAGS: -Werror
         - os: windows-2022
-          package-file: DDNet-Server.exe
+          build-file: DDNet-Server.exe
+          server-file: TeeAsylum-Server.exe
           env:
             CFLAGS: /WX
             CXXFLAGS: /WX
@@ -40,22 +42,44 @@ jobs:
 
     - name: Move release
       if: contains(matrix.os, 'windows')
-      run: mv ./release/${{ matrix.package-file }} ./
-
-    - name: Test release
-      run: ./${{ matrix.package-file }} shutdown
+      run: mv ./release/${{ matrix.build-file }} ./
 
     - name: Package
+      shell: bash
       run: |
-        mkdir artifacts
-        mv ${{ matrix.package-file }} artifacts
+        dir=artifacts/TeeAsylum-Expansion
+        mkdir -p $dir/data
+        cp ${{ matrix.build-file }} $dir/${{ matrix.server-file }}
+        cp -r data/maps data/maps7 $dir/data/
+        cp -r room_config $dir/
+        rm -r $dir/room_config/mapfiles
+        cp package/autoexec.cfg package/storage.cfg license.txt $dir/
+        if [ "$RUNNER_OS" = Windows ]; then
+          cp package/Start-TeeAsylum.cmd sqlite3.dll $dir/
+        fi
 
-    - name: Package sqlite3.dll
+    - name: Test package
+      shell: bash
+      timeout-minutes: 2
+      run: |
+        cp -r artifacts/TeeAsylum-Expansion test-run
+        cd test-run
+        ./${{ matrix.server-file }} -f autoexec.cfg shutdown
+
+    - name: Upload Windows package
       if: contains(matrix.os, 'windows')
-      run: cp sqlite3.dll artifacts
-
-    - name: Upload Artifacts
       uses: actions/upload-artifact@v7
       with:
-        name: hunter-${{ matrix.os }}-build-cmake
+        name: TeeAsylum-Expansion-Windows
         path: artifacts
+
+    - name: Archive Linux package
+      if: contains(matrix.os, 'ubuntu')
+      run: tar -czf TeeAsylum-Expansion-Linux.tar.gz -C artifacts TeeAsylum-Expansion
+
+    - name: Upload Linux package
+      if: contains(matrix.os, 'ubuntu')
+      uses: actions/upload-artifact@v7
+      with:
+        path: TeeAsylum-Expansion-Linux.tar.gz
+        archive: false
