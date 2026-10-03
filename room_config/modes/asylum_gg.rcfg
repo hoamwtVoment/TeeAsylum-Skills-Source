@@ -1,0 +1,4 @@
+exec "room_config/asylum-common.rcfg"
+scorelimit 17
+timelimit 0
+asylum_round_seconds 480

@@ -1,0 +1,6 @@
+exec "room_config/asylum-common.rcfg"
+scorelimit 75
+timelimit 0
+asylum_round_seconds 360
+teamdamage 0
+teambalance_time 1

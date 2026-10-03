@@ -1,0 +1,5 @@
+# 7 melee x 9 ranged x 8 utility = 504 possible FFA loadouts
+exec "room_config/asylum-common.rcfg"
+scorelimit 25
+timelimit 0
+asylum_round_seconds 480
