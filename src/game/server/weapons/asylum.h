@@ -15,6 +15,10 @@ enum EAsylumItem
 	ASYLUM_MANTLE, ASYLUM_REROLL, ASYLUM_PARASOL, ASYLUM_CLEAVE,
 	ASYLUM_LILYNETTE, ASYLUM_CHICAGO, ASYLUM_M1911, ASYLUM_BOW,
 	ASYLUM_PIXELGUN, ASYLUM_VAMPIREKNIVES, ASYLUM_TASER, ASYLUM_HYPERLASER,
+	// ★ God-tier items: rare per-slot rolls (asylum_god_chance), loud on purpose.
+	ASYLUM_BANHAMMER, ASYLUM_BIRCHTREE, ASYLUM_ZENITH,
+	ASYLUM_TSARBOMB, ASYLUM_BLACKHOLE, ASYLUM_JUDGE,
+	ASYLUM_TRAIN, ASYLUM_JUMPSCARE, ASYLUM_MOYAI,
 	NUM_ASYLUM_ITEMS
 };
 
@@ -34,10 +38,12 @@ struct SAsylumItem
 	int m_DelayMs;
 	float m_Force;
 	int m_Category;
+	bool m_God = false;
 };
 
 const SAsylumItem &AsylumItem(int Item);
-int AsylumRandomItem(int Category);
+// Picks from the god-tier pool when God is set, otherwise from the ordinary one.
+int AsylumRandomItem(int Category, bool God = false);
 int AsylumWeaponID(int Item);
 bool AsylumIsWeapon(int WeaponID);
 
@@ -51,12 +57,22 @@ class CAsylumWeapon : public CWeapon
 	int m_CounterUntil;
 	int m_UltimateStartTick;
 	int m_UltimateShots;
+	int m_SlamTick;
+	int m_LastQuoteTick;
 	void Fire(vec2 Direction) override;
 	void FireUltimateBeam(vec2 Direction);
 	static bool UltimateLaserHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 	static bool BulletHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 	static bool GrenadeHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 	static bool LaserHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+
+	// ★ God-tier items, implemented in asylum_god.cpp.
+	bool FireGodItem(vec2 Direction);
+	void TickGodItem();
+	static bool TsarHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+	static bool JudgeHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+	static bool BlackholeLaserHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+	static bool LightningHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 
 public:
 	CAsylumWeapon(CCharacter *pOwner, int Item);
@@ -113,5 +129,14 @@ using CAsylumPixelGun = CAsylumItem<ASYLUM_PIXELGUN>;
 using CAsylumVampireKnives = CAsylumItem<ASYLUM_VAMPIREKNIVES>;
 using CAsylumTaser = CAsylumItem<ASYLUM_TASER>;
 using CAsylumHyperlaser = CAsylumItem<ASYLUM_HYPERLASER>;
+using CAsylumBanhammer = CAsylumItem<ASYLUM_BANHAMMER>;
+using CAsylumBirchTree = CAsylumItem<ASYLUM_BIRCHTREE>;
+using CAsylumZenith = CAsylumItem<ASYLUM_ZENITH>;
+using CAsylumTsarBomb = CAsylumItem<ASYLUM_TSARBOMB>;
+using CAsylumBlackhole = CAsylumItem<ASYLUM_BLACKHOLE>;
+using CAsylumJudge = CAsylumItem<ASYLUM_JUDGE>;
+using CAsylumTrain = CAsylumItem<ASYLUM_TRAIN>;
+using CAsylumJumpscare = CAsylumItem<ASYLUM_JUMPSCARE>;
+using CAsylumMoyai = CAsylumItem<ASYLUM_MOYAI>;
 
 #endif

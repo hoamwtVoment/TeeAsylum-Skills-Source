@@ -2,6 +2,7 @@
 #include "huntern.h"
 
 #include <game/mapitems.h>
+#include <game/server/entities/asylum_fx.h>
 #include <game/server/entities/character.h>
 #include <game/server/player.h>
 #include <game/server/weapons.h>
@@ -45,12 +46,15 @@ CGameControllerHunterN::CGameControllerHunterN(int Mode) : IGameController(),
 		m_aParticipants[CID] = m_aInfected[CID] = false;
 		m_aPendingReroll[CID] = m_aLastDamageWeapon[CID] = m_aLastDamageFrom[CID] = m_aLastDamageTick[CID] = -1;
 		m_aLastRerollTick[CID] = -1000000;
+		m_aScreenTextUntil[CID] = 0;
 	}
 	INSTANCE_CONFIG_INT(&m_RespawnDelay, "asylum_respawn_delay", 2, 1, 10, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Respawn delay in seconds");
 	INSTANCE_CONFIG_INT(&m_SpawnProtection, "asylum_spawn_protection", 1, 0, 5, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Spawn shield in seconds, cancelled on firing");
 	INSTANCE_CONFIG_INT(&m_SpawnArmor, "asylum_spawn_armor", 20, 0, 100, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Armor granted on each spawn");
 	INSTANCE_CONFIG_INT(&m_StartingLives, "asylum_lives", 3, 1, 10, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Lives in ELIM and for JGN challengers");
 	INSTANCE_CONFIG_INT(&m_RoundSeconds, "asylum_round_seconds", gs_aModeSeconds[m_Mode], 10, 3600, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Round duration in seconds");
+	INSTANCE_CONFIG_INT(&m_GodChance, "asylum_god_chance", 5, 0, 100, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Chance in percent per slot to roll a god-tier (★) item");
+	INSTANCE_CONFIG_INT(&m_GodOnly, "asylum_god_only", 0, 0, 1, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Roll only god-tier (★) items");
 	InstanceConsole()->Register("asylum_status", "", CFGFLAG_CHAT | CFGFLAG_INSTANCE | CFGFLAG_NO_CONSENT, ConStatus, this, "Show mode, timer, lives and equipment");
 	InstanceConsole()->Register("asylum_items", "", CFGFLAG_CHAT | CFGFLAG_INSTANCE | CFGFLAG_NO_CONSENT, ConItems, this, "List all random items");
 	InstanceConsole()->Register("asylum_loadout", "i[cid] i[melee] i[ranged] i[utility]", CFGFLAG_INSTANCE, ConLoadout, this, "Administrator: equip valid category items on an existing character");
@@ -75,8 +79,16 @@ void CGameControllerHunterN::ConStatus(IConsole::IResult *pResult, void *pUserDa
 void CGameControllerHunterN::ConItems(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameControllerHunterN *pSelf = (CGameControllerHunterN *)pUserData;
-	char aHeader[96];
-	str_format(aHeader, sizeof(aHeader), "装备池：共%d件近战、远程与特殊道具。", NUM_ASYLUM_ITEMS);
+	int NumGod = 0;
+	for(int Item = 0; Item < NUM_ASYLUM_ITEMS; ++Item)
+		NumGod += AsylumItem(Item).m_God;
+	char aGod[64];
+	if(pSelf->m_GodOnly)
+		str_copy(aGod, "当前只抽★大神武器", sizeof(aGod));
+	else
+		str_format(aGod, sizeof(aGod), "每个槽位%d%%概率抽到", pSelf->m_GodChance);
+	char aHeader[192];
+	str_format(aHeader, sizeof(aHeader), "装备池：共%d件近战、远程与特殊道具，其中★大神武器%d件，%s。", NUM_ASYLUM_ITEMS, NumGod, aGod);
 	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aHeader);
 	if(pResult->m_ClientID >= 0 && pResult->m_ClientID < MAX_CLIENTS)
 		pSelf->GameServer()->SendChatTarget(pResult->m_ClientID, aHeader);
@@ -201,6 +213,7 @@ void CGameControllerHunterN::OnPlayerJoin(CPlayer *pPlayer)
 	for(int &Item : m_aLoadouts[CID])
 		Item = -1;
 	m_aPendingReroll[CID] = -1;
+	m_aScreenTextUntil[CID] = 0;
 	pPlayer->SetClass(CLASS_NONE);
 	GameServer()->SendChatTarget(CID, gs_apRules[m_Mode]);
 	GameServer()->SendChatTarget(CID, "按1/2/3切换装备，左键使用；弹药无限，技能有独立冷却。投票菜单可查看规则和装备列表。");
@@ -252,10 +265,14 @@ bool CGameControllerHunterN::OnPlayerTryRespawn(CPlayer *pPlayer, vec2 Pos)
 void CGameControllerHunterN::GiveLoadout(CCharacter *pChr, bool Randomize)
 {
 	const int CID = pChr->GetPlayer()->GetCID();
+	// A lucky god-tier roll is announced; with asylum_god_only every roll is one, so stay quiet.
+	bool Lucky = false;
 	if(Randomize || m_aLoadouts[CID][0] < 0)
 		for(int Slot = 0; Slot < 3; ++Slot)
 		{
-			m_aLoadouts[CID][Slot] = AsylumRandomItem(Slot);
+			const bool God = m_GodOnly || secure_rand_below(100) < m_GodChance;
+			Lucky |= God && !m_GodOnly;
+			m_aLoadouts[CID][Slot] = AsylumRandomItem(Slot, God);
 			// The juggernaut's heavy arsenal is intentionally asymmetric.
 			if(m_Mode == MODE_JGN && CID != m_Juggernaut)
 				while(m_aLoadouts[CID][Slot] == ASYLUM_AMERICA || m_aLoadouts[CID][Slot] == ASYLUM_TASER)
@@ -284,6 +301,26 @@ void CGameControllerHunterN::GiveLoadout(CCharacter *pChr, bool Randomize)
 	pChr->SetWeaponSlot(m_Mode == MODE_GG || (m_Mode == MODE_ZS && m_aInfected[CID]) ? 0 : 1, false);
 	m_aPendingReroll[CID] = -1;
 	SendLoadout(CID, true);
+	if(Lucky)
+	{
+		// Mode overrides above may have replaced the rolled items.
+		char aItems[192] = "";
+		for(int Slot = 0; Slot < 3; ++Slot)
+			if(AsylumItem(m_aLoadouts[CID][Slot]).m_God)
+			{
+				if(aItems[0])
+					str_append(aItems, "、", sizeof(aItems));
+				str_append(aItems, AsylumItem(m_aLoadouts[CID][Slot]).m_pName, sizeof(aItems));
+			}
+		if(aItems[0])
+		{
+			char aAnnouncement[256];
+			str_format(aAnnouncement, sizeof(aAnnouncement), "★ 大神武器降临！%s 抽到了 %s", Server()->ClientName(CID), aItems);
+			SendChatTarget(-1, aAnnouncement);
+			AsylumPlayMeme(GameWorld(), ASYLUM_MEME_FANFARE, pChr->m_Pos, true, CmaskOne(CID));
+			AsylumPlayMeme(GameWorld(), ASYLUM_MEME_FANFARE, pChr->m_Pos, false, ~CmaskOne(CID));
+		}
+	}
 	char aBuf[96];
 	str_format(aBuf, sizeof(aBuf), "loadout cid=%d mode=%d items=%d,%d,%d", CID, m_Mode,
 		m_aLoadouts[CID][0], m_aLoadouts[CID][1], m_aLoadouts[CID][2]);
@@ -328,6 +365,14 @@ void CGameControllerHunterN::RerollLoadout(CCharacter *pChr)
 	}
 	m_aLastRerollTick[CID] = Server()->Tick();
 	m_aPendingReroll[CID] = Server()->Tick();
+}
+
+void CGameControllerHunterN::ShowScreenText(int CID, const char *pText, float Seconds)
+{
+	if(CID < 0 || CID >= MAX_CLIENTS || !GetPlayerIfInRoom(CID))
+		return;
+	m_aScreenTextUntil[CID] = Server()->Tick() + round_to_int(Seconds * Server()->TickSpeed());
+	GameServer()->SendBroadcast(pText, CID, false);
 }
 
 bool CGameControllerHunterN::CanCombatInteract(int From, int To) const
@@ -609,7 +654,7 @@ void CGameControllerHunterN::OnPostTick()
 		}
 		if(!pChr && !pPlayer->m_RespawnDisabled && Server()->Tick() >= pPlayer->m_RespawnTick)
 			pPlayer->Respawn();
-		if(Server()->Tick() % maximum(1, Server()->TickSpeed() / 2) == 0)
+		if(Server()->Tick() % maximum(1, Server()->TickSpeed() / 2) == 0 && Server()->Tick() >= m_aScreenTextUntil[CID])
 			SendLoadout(CID, false);
 	}
 }

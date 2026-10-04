@@ -40,6 +40,15 @@ const SAsylumItem gs_aItems[] = {
 	{"吸血飞刀 / Vampire knives", "4至8枚飞刀各4伤 / 实伤50%回血", WEAPON_SHOTGUN, 4, 500, 0.0f, 1},
 	{"电击枪 / Taser", "45至30伤 / 短暂冻结 / 3.5秒", WEAPON_LASER, 45, 3500, 0.0f, 1},
 	{"超能激光 / Hyperlaser", "20伤小范围爆破 / 冻结目标35伤", WEAPON_GUN, 20, 660, 0.0f, 1},
+	{"★封禁之锤 / Banhammer", "60伤重锤+震地波 / 击杀即“封禁”", WEAPON_HAMMER, 60, 1100, 14.0f, 0, true},
+	{"★白桦树 / Birch tree", "“我爱树木。”0.8秒后90伤巨砸", WEAPON_HAMMER, 90, 3000, 26.0f, 0, true},
+	{"★天顶剑 / Zenith", "飞剑风暴飞向准星再飞回 / 每剑18伤", WEAPON_HAMMER, 18, 1200, 6.0f, 0, true},
+	{"★沙皇炸弹 / Tsar bobm", "落地倒数1.5秒 / 三圈核爆，可自伤", WEAPON_GRENADE, 80, 9000, 0.0f, 1, true},
+	{"★黑洞射线枪 / Blackhole raygun", "25伤激光 / 落点生成3秒黑洞", WEAPON_LASER, 25, 4500, 0.0f, 1, true},
+	{"★审判 / Judge", "命中掷0~9：随机神秘效果", WEAPON_GUN, 0, 700, 0.0f, 1, true},
+	{"★失控列车 / Unstoppable train", "召唤穿墙列车 / 撞击40伤并撞飞", WEAPON_HAMMER, 40, 12000, 30.0f, 2, true},
+	{"★惊吓 / Jumpscare", "附近敌人尖叫+冻结1秒 / 10伤", WEAPON_HAMMER, 10, 12000, 0.0f, 2, true},
+	{"★摩艾 / Moyai", "VINE BOOM震飞周围敌人 / 自身石化1秒", WEAPON_HAMMER, 15, 8000, 24.0f, 2, true},
 };
 static_assert(sizeof(gs_aItems) / sizeof(gs_aItems[0]) == NUM_ASYLUM_ITEMS, "Item table mismatch");
 
@@ -55,11 +64,11 @@ bool CanAffect(CCharacter *pOwner, CCharacter *pTarget, int WeaponID)
 
 const SAsylumItem &AsylumItem(int Item) { return gs_aItems[clamp(Item, 0, NUM_ASYLUM_ITEMS - 1)]; }
 
-int AsylumRandomItem(int Category)
+int AsylumRandomItem(int Category, bool God)
 {
 	int aPool[NUM_ASYLUM_ITEMS], Count = 0;
 	for(int i = 0; i < NUM_ASYLUM_ITEMS; ++i)
-		if(gs_aItems[i].m_Category == Category)
+		if(gs_aItems[i].m_Category == Category && gs_aItems[i].m_God == God)
 			aPool[Count++] = i;
 	return Count ? aPool[secure_rand_below(Count)] : ASYLUM_PAN;
 }
@@ -69,7 +78,7 @@ bool AsylumIsWeapon(int ID) { return ID >= WEAPON_ID_ASYLUM_PAN && ID < WEAPON_I
 
 CAsylumWeapon::CAsylumWeapon(CCharacter *pOwner, int Item) : CWeapon(pOwner), m_Item(Item), m_MantleCharges(0),
 	m_Charge(0), m_ENextTick(0), m_RNextTick(Item == ASYLUM_LILYNETTE ? pOwner->Server()->Tick() + pOwner->Server()->TickSpeed() * 17 : 0),
-	m_CounterUntil(0), m_UltimateStartTick(-1), m_UltimateShots(0)
+	m_CounterUntil(0), m_UltimateStartTick(-1), m_UltimateShots(0), m_SlamTick(-1), m_LastQuoteTick(-1000000)
 {
 	m_MaxAmmo = m_Ammo = -1;
 	m_FireDelay = AsylumItem(Item).m_DelayMs;
@@ -185,6 +194,7 @@ void CAsylumWeapon::FireUltimateBeam(vec2 Direction)
 void CAsylumWeapon::Tick()
 {
 	CWeapon::Tick();
+	TickGodItem();
 	if(m_Item != ASYLUM_LILYNETTE)
 		return;
 	const bool Held = Character()->CurrentWeapon() == this;
@@ -229,6 +239,7 @@ void CAsylumWeapon::TickPaused()
 	if(m_RNextTick > 0) ++m_RNextTick;
 	if(m_CounterUntil > 0) ++m_CounterUntil;
 	if(m_UltimateStartTick >= 0) ++m_UltimateStartTick;
+	if(m_SlamTick >= 0) ++m_SlamTick;
 }
 
 int CAsylumWeapon::NumAmmoIcons()
@@ -324,6 +335,8 @@ void CAsylumWeapon::Fire(vec2 Direction)
 {
 	const SAsylumItem &Item = AsylumItem(m_Item);
 	const int CID = Character()->GetPlayer()->GetCID();
+	if(Item.m_God && FireGodItem(Direction))
+		return;
 	if(m_Item == ASYLUM_MEDKIT)
 	{
 		Character()->IncreaseHealth(40);

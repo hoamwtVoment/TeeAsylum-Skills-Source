@@ -938,6 +938,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   classes.h
   ddracechat.cpp
   ddracecommands.cpp
+  entities/asylum_fx.cpp
+  entities/asylum_fx.h
   entities/character.cpp
   entities/character.h
   entities/door.cpp
@@ -1000,6 +1002,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   weapons.h
   weapons/asylum.cpp
   weapons/asylum.h
+  weapons/asylum_god.cpp
   weapons/explodinglaser.cpp
   weapons/explodinglaser.h
   weapons/grenade.cpp

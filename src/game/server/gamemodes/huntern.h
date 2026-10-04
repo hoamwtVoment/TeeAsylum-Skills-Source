@@ -13,6 +13,8 @@ public:
 	void RerollLoadout(class CCharacter *pChr);
 	bool CanCombatInteract(int From, int To) const;
 	bool CanWeaponInteract(int From, int To, int WeaponID) const;
+	// Replaces the status broadcast of one player for a moment.
+	void ShowScreenText(int CID, const char *pText, float Seconds);
 	void OnGameStart(bool IsRound) override;
 	void OnWorldReset() override;
 	void OnCharacterSpawn(class CCharacter *pChr) override;
@@ -36,6 +38,8 @@ private:
 	int m_SpawnArmor;
 	int m_StartingLives;
 	int m_RoundSeconds;
+	int m_GodChance;
+	int m_GodOnly;
 	bool m_RoundActive;
 	int m_Juggernaut;
 	int m_InfectionBonusSeconds;
@@ -54,6 +58,7 @@ private:
 	int m_aLastDamageWeapon[MAX_CLIENTS];
 	int m_aLastDamageFrom[MAX_CLIENTS];
 	int m_aLastDamageTick[MAX_CLIENTS];
+	int m_aScreenTextUntil[MAX_CLIENTS];
 	bool LimitedLives() const { return m_Mode == MODE_ELIM || m_Mode == MODE_JGN; }
 	int RemainingSeconds() const;
 	int ProgressItem(int CID) const;
