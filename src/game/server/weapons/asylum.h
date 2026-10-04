@@ -38,7 +38,9 @@ struct SAsylumItem
 	int m_DelayMs;
 	float m_Force;
 	int m_Category;
-	bool m_God = false;
+	// Left out (false) in ordinary rows. No "= false": GCC builds as C++11,
+	// where a default member initializer stops the table being an aggregate.
+	bool m_God;
 };
 
 const SAsylumItem &AsylumItem(int Item);
