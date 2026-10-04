@@ -3,6 +3,7 @@
 #define GAME_SERVER_GAMEMODES_HUNTERN_H
 
 #include <game/server/gamecontroller.h>
+#include <game/server/asylum_time.h>
 
 class CGameControllerHunterN : public IGameController
 {
@@ -15,6 +16,10 @@ public:
 	bool CanWeaponInteract(int From, int To, int WeaponID) const;
 	// Replaces the status broadcast of one player for a moment.
 	void ShowScreenText(int CID, const char *pText, float Seconds);
+	void ShowJumpscare(int CID, float Seconds);
+	bool ActivateTheWorld(int CID);
+	int TheWorldCooldown(int CID) const;
+	int MapAnimationStartTick(int SnappingClient, int DefaultStartTick) const override;
 	void OnGameStart(bool IsRound) override;
 	void OnWorldReset() override;
 	void OnCharacterSpawn(class CCharacter *pChr) override;
@@ -59,6 +64,8 @@ private:
 	int m_aLastDamageFrom[MAX_CLIENTS];
 	int m_aLastDamageTick[MAX_CLIENTS];
 	int m_aScreenTextUntil[MAX_CLIENTS];
+	int m_aJumpscareStart[MAX_CLIENTS];
+	int m_aJumpscareUntil[MAX_CLIENTS];
 	bool LimitedLives() const { return m_Mode == MODE_ELIM || m_Mode == MODE_JGN; }
 	int RemainingSeconds() const;
 	int ProgressItem(int CID) const;
@@ -67,9 +74,14 @@ private:
 	void FinishPlayer(int CID, const char *pReason);
 	void FinishSide(bool InfectedWon, const char *pReason);
 	void Forfeit(int CID);
+	void ResetPlayerCooldowns(class CPlayer *pPlayer);
 	static void ConStatus(IConsole::IResult *pResult, void *pUserData);
 	static void ConItems(IConsole::IResult *pResult, void *pUserData);
 	static void ConLoadout(IConsole::IResult *pResult, void *pUserData);
+	static void ConNoCooldown(IConsole::IResult *pResult, void *pUserData);
+	static void ConResetCooldown(IConsole::IResult *pResult, void *pUserData);
+	static void ConTestGod(IConsole::IResult *pResult, void *pUserData);
+	static void ConTestWeapon(IConsole::IResult *pResult, void *pUserData);
 };
 
 template<int Mode>

@@ -940,6 +940,9 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   ddracecommands.cpp
   entities/asylum_fx.cpp
   entities/asylum_fx.h
+  entities/asylum_spark.cpp
+  entities/asylum_spark.h
+  asylum_time.h
   entities/character.cpp
   entities/character.h
   entities/door.cpp

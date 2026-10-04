@@ -55,7 +55,7 @@ void CEventHandler::Snap(int SnappingClient)
 			int Size = m_aSizes[i];
 			const char *Data = &m_aData[m_aOffsets[i]];
 			if(OverrideEvent(SnappingClient, &Type, &Size, &Data))
-				return;
+				continue;
 
 			// larger clip for events (especially for sounds), to provides full spatial sounds
 			if(!NetworkPointClipped(GameServer(), SnappingClient, vec2(ev->m_X, ev->m_Y), vec2(1800.0f, 1800.0f)))

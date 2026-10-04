@@ -127,6 +127,14 @@ class CGameContext : public IGameServer
 	static void ConAddGameTypeFile(IConsole::IResult *pResult, void *pUserData);
 	static void ConAddMapName(IConsole::IResult *pResult, void *pUserData);
 	static void ConRoomSetting(IConsole::IResult *pResult, void *pUserData);
+	// Global RCON entry points: route to the target player's current room.
+	void ForwardAsylumTest(IConsole::IResult *pResult, const char *pCommand, bool Items = false);
+	static void ConAsylumTestNoCooldown(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestResetCooldown(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestGod(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestWeapon(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestLoadout(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestItems(IConsole::IResult *pResult, void *pUserData);
 
 	// HunterN commands
 	static void ConSetClass(IConsole::IResult *pResult, void *pUserData);

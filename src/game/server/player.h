@@ -4,6 +4,7 @@
 #define GAME_SERVER_PLAYER_H
 
 #include "alloc.h"
+#include "asylum_time.h"
 
 // this include should perhaps be removed
 // #include "score.h"
@@ -40,6 +41,11 @@ public:
 	void TryRespawn();
 	void Respawn();
 	void CancelSpawn();
+	// Session-owned: death, rerolls, round resets and room changes cannot
+	// replace the cooldown by handing out a fresh weapon instance.
+	CAsylumWorldCooldown m_TheWorldCooldown;
+	bool m_AsylumNoCooldown;
+	bool m_AsylumTestGod;
 	CCharacter *ForceSpawn(vec2 Pos);
 	void SetTeam(int Team);
 	int GetTeam() const { return m_Team; };

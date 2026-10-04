@@ -601,6 +601,9 @@ public:
 			Usually this is not needed
 	*/
 	virtual void OnSnap(int SnappingClient){};
+	// Cosmetic, per-client synchronized map animation clock. Never changes the
+	// authoritative round timer or game state.
+	virtual int MapAnimationStartTick(int SnappingClient, int DefaultStartTick) const { return DefaultStartTick; }
 
 	// =================
 	//    GAME EVENTS

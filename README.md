@@ -61,6 +61,14 @@ Wiki 上的 BOSS、MU、TC、KIT、XMAS、VIP 等模式尚未实现。
 - `room_setting 0 asylum_items`：查看装备 ID。
 - `room_setting 0 asylum_status`：查看当前模式状态。
 - `room_setting 0 asylum_loadout <客户端ID> <近战ID> <远程ID> <特殊ID>`：给普通角色指定装备。固定身份和 GG 模式不能覆盖。
+- `asylum_test_nocd <客户端ID> <0或1>`：给该玩家开关无冷却，默认关闭；不跳过前摇和持续时间。
+- `asylum_test_reset_cd <客户端ID>`：单次清空装备/技能和 The World 会话冷却；死亡、重抽、重新指定装备本身不重置 The World 冷却。
+- `asylum_test_god <客户端ID> <0或1>`：给该玩家开关锁血无敌；可以被正常击中，血甲不减少，命中反馈、击退、冻结、跳脸和时停仍生效。K自杀仍可用。
+- `asylum_test_weapon <客户端ID> <装备ID>`：只换一件装备，自动放到对应槽位并切换到它；其他槽位和血甲不变。
+- `asylum_test_loadout <客户端ID> <近战ID> <远程ID> <特殊ID>`：三槽配装测试。
+- `asylum_test_items [客户端ID]`：列出测试装备 ID，客户端 ID 可省略。
+
+`asylum_test_*` 直接在 RCON 使用，自动定位目标玩家当前房间，**不用加 `room_setting`**。原 `room_setting <房间ID> asylum_test_...` 和 `asylum_loadout` 写法仍兼容；这些指令不注册为普通玩家聊天命令。
 
 在Ubuntu上使用CMake构建
 ---

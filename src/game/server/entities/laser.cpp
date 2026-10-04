@@ -27,7 +27,9 @@ CLaser::CLaser(
 	m_Energy = StartEnergy;
 	m_Dir = Direction;
 	m_Bounces = 0;
-	m_EvalTick = 0;
+	m_EvalTick = Server()->Tick();
+	m_From = Pos;
+	m_PendingInitialBounce = GameWorld()->IsTimeStopped();
 	m_TelePos = vec2(0, 0);
 	m_WasTele = false;
 	m_Type = WeaponType;
@@ -52,7 +54,8 @@ CLaser::CLaser(
 		}
 	}
 	GameWorld()->InsertEntity(this);
-	DoBounce();
+	if(!m_PendingInitialBounce)
+		DoBounce();
 }
 
 bool CLaser::HitCharacter(vec2 From, vec2 To)
@@ -218,6 +221,14 @@ void CLaser::Tick()
 		Reset(); // owner has gone to another reality.
 		return;
 	}
+	// Laser constructors normally hit immediately. During a time stop defer
+	// even their FIRST hit, otherwise the caster could fire moving hitscan shots.
+	if(m_PendingInitialBounce)
+	{
+		m_PendingInitialBounce = false;
+		DoBounce();
+		return;
+	}
 
 	float Delay;
 	if(m_TuneZone)
@@ -249,7 +260,8 @@ void CLaser::Snap(int SnappingClient, int OtherMode)
 	pObj->m_Y = (int)m_Pos.y;
 	pObj->m_FromX = (int)m_From.x;
 	pObj->m_FromY = (int)m_From.y;
-	pObj->m_StartTick = OtherMode ? m_EvalTick - 4 : m_EvalTick; // HACK: Send thin laser for other team.
+	const int EvalTick = GameWorld()->IsTimeStopped() ? Server()->Tick() : m_EvalTick;
+	pObj->m_StartTick = OtherMode ? EvalTick - 4 : EvalTick; // HACK: Send thin laser for other team.
 }
 
 void CLaser::Destroy()

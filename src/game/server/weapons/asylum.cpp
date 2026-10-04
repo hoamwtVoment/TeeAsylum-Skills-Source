@@ -47,8 +47,11 @@ const SAsylumItem gs_aItems[] = {
 	{"★黑洞射线枪 / Blackhole raygun", "25伤激光 / 落点生成3秒黑洞", WEAPON_LASER, 25, 4500, 0.0f, 1, true},
 	{"★审判 / Judge", "命中掷0~9：随机神秘效果", WEAPON_GUN, 0, 700, 0.0f, 1, true},
 	{"★失控列车 / Unstoppable train", "召唤穿墙列车 / 撞击40伤并撞飞", WEAPON_HAMMER, 40, 12000, 30.0f, 2, true},
-	{"★惊吓 / Jumpscare", "附近敌人尖叫+冻结1秒 / 10伤", WEAPON_HAMMER, 10, 12000, 0.0f, 2, true},
+	{"★惊吓 / Jumpscare", "巨石强森4:3半透明跳脸+Vine Boom / 冻结1秒 / 10伤", WEAPON_HAMMER, 10, 12000, 0.0f, 2, true},
 	{"★摩艾 / Moyai", "VINE BOOM震飞周围敌人 / 自身石化1秒", WEAPON_HAMMER, 15, 8000, 24.0f, 2, true},
+	{"★动感星期五 / Microphone", "节奏箭头18伤 / 0.2秒连射 / BF原声", WEAPON_GUN, 18, 200, 4.0f, 1, true},
+	{"恋符MasterSpark", "蓄力0.6秒 / 极粗贯穿光束2秒 / 每0.12秒12伤 / 冷却12秒", WEAPON_LASER, 12, 12000, 0.0f, 1, true},
+	{"★The World（ザ・ワールド）", "全图时停5秒，只有自己能动 / 60秒冷却 / 有效击杀减2秒，最多减10秒", WEAPON_HAMMER, 0, 60000, 0.0f, 2, true},
 };
 static_assert(sizeof(gs_aItems) / sizeof(gs_aItems[0]) == NUM_ASYLUM_ITEMS, "Item table mismatch");
 
@@ -76,18 +79,69 @@ int AsylumRandomItem(int Category, bool God)
 int AsylumWeaponID(int Item) { return WEAPON_ID_ASYLUM_PAN + clamp(Item, 0, NUM_ASYLUM_ITEMS - 1); }
 bool AsylumIsWeapon(int ID) { return ID >= WEAPON_ID_ASYLUM_PAN && ID < WEAPON_ID_ASYLUM_PAN + NUM_ASYLUM_ITEMS; }
 
-CAsylumWeapon::CAsylumWeapon(CCharacter *pOwner, int Item) : CWeapon(pOwner), m_Item(Item), m_MantleCharges(0),
-	m_Charge(0), m_ENextTick(0), m_RNextTick(Item == ASYLUM_LILYNETTE ? pOwner->Server()->Tick() + pOwner->Server()->TickSpeed() * 17 : 0),
-	m_CounterUntil(0), m_UltimateStartTick(-1), m_UltimateShots(0), m_SlamTick(-1), m_LastQuoteTick(-1000000)
+CAsylumWeapon::CAsylumWeapon(CCharacter *pOwner, int Item) :
+	CWeapon(pOwner), m_Item(Item), m_MantleCharges(0), m_Charge(0), m_ENextTick(0), m_RNextTick(Item == ASYLUM_LILYNETTE ? pOwner->Server()->Tick() + pOwner->Server()->TickSpeed() * 17 : 0), m_CounterUntil(0), m_UltimateStartTick(-1), m_UltimateShots(0), m_SlamTick(-1), m_LastQuoteTick(-1000000), m_Note(0)
 {
 	m_MaxAmmo = m_Ammo = -1;
 	m_FireDelay = AsylumItem(Item).m_DelayMs;
 	m_FullAuto = AsylumItem(Item).m_Category != ASYLUM_CATEGORY_UTILITY;
+	if(Item == ASYLUM_THEWORLD)
+		m_ReloadTimer = ((CGameControllerHunterN *)pOwner->Controller())->TheWorldCooldown(pOwner->GetPlayer()->GetCID());
+	for(int &ID : m_aMicrophoneIDs)
+		ID = Item == ASYLUM_MICROPHONE ? Server()->SnapNewID() : -1;
+	if(IgnoreCooldown())
+		ResetCooldowns();
+}
+
+CAsylumWeapon::~CAsylumWeapon()
+{
+	for(int ID : m_aMicrophoneIDs)
+		if(ID >= 0)
+			Server()->SnapFreeID(ID);
+}
+
+bool CAsylumWeapon::IgnoreCooldown()
+{
+	return Character()->GetPlayer()->m_AsylumNoCooldown;
+}
+
+void CAsylumWeapon::ResetCooldowns()
+{
+	m_ReloadTimer = 0;
+	m_ENextTick = 0;
+	m_RNextTick = 0;
+	// Active windups, durations, shields and R charge are not cooldowns.
+}
+
+void CAsylumWeapon::Snap(int SnappingClient, int OtherMode)
+{
+	if(OtherMode || m_Item != ASYLUM_MICROPHONE || Character()->CurrentWeapon() != this || Character()->IsFrozen() || Character()->NetworkClipped(SnappingClient))
+		return;
+	const vec2 Aim = Character()->GetAimDirection();
+	const vec2 Side(-Aim.y, Aim.x);
+	const vec2 Base = Pos() + Aim * 18.0f;
+	const vec2 Head = Base + Aim * 24.0f;
+	// A small outlined microphone next to the normal gun sprite, no client mod.
+	const vec2 aHead[] = {Head - Aim * 7.0f - Side * 8.0f, Head + Aim * 7.0f - Side * 8.0f,
+		Head + Aim * 7.0f + Side * 8.0f, Head - Aim * 7.0f + Side * 8.0f};
+	const vec2 aFrom[] = {Base - Side * 3.0f, Base + Side * 3.0f, aHead[0], aHead[1], aHead[2], aHead[3]};
+	const vec2 aTo[] = {Head - Aim * 7.0f - Side * 3.0f, Head - Aim * 7.0f + Side * 3.0f, aHead[1], aHead[2], aHead[3], aHead[0]};
+	for(int i = 0; i < 6; ++i)
+	{
+		CNetObj_Laser *pObj = (CNetObj_Laser *)Server()->SnapNewItem(NETOBJTYPE_LASER, m_aMicrophoneIDs[i], sizeof(CNetObj_Laser));
+		if(!pObj)
+			continue;
+		pObj->m_FromX = round_to_int(aFrom[i].x);
+		pObj->m_FromY = round_to_int(aFrom[i].y);
+		pObj->m_X = round_to_int(aTo[i].x);
+		pObj->m_Y = round_to_int(aTo[i].y);
+		pObj->m_StartTick = Server()->Tick();
+	}
 }
 
 void CAsylumWeapon::AddCharge(int ActualDamage)
 {
-	if(m_Item != ASYLUM_LILYNETTE || ActualDamage <= 0 || Server()->Tick() < m_RNextTick || m_UltimateStartTick >= 0)
+	if(m_Item != ASYLUM_LILYNETTE || ActualDamage <= 0 || (!IgnoreCooldown() && Server()->Tick() < m_RNextTick) || m_UltimateStartTick >= 0)
 		return;
 	const int Previous = m_Charge;
 	m_Charge = minimum(250, m_Charge + ActualDamage);
@@ -111,7 +165,7 @@ bool CAsylumWeapon::ActivateSkill(bool Ultimate, vec2 Direction)
 	}
 	if(Ultimate)
 	{
-		if(Now < m_RNextTick || m_Charge < 250)
+		if((!IgnoreCooldown() && Now < m_RNextTick) || m_Charge < 250)
 		{
 			GameServer()->SendChatTarget(CID, "[Lilynette] R未就绪：需要250实际伤害充能，且冷却结束。");
 			return false;
@@ -126,7 +180,7 @@ bool CAsylumWeapon::ActivateSkill(bool Ultimate, vec2 Direction)
 	}
 	else
 	{
-		if(Now < m_ENextTick || m_CounterUntil > Now)
+		if((!IgnoreCooldown() && Now < m_ENextTick) || m_CounterUntil > Now)
 		{
 			GameServer()->SendChatTarget(CID, "[Lilynette] E反击仍在冷却。");
 			return false;
@@ -163,6 +217,12 @@ bool CAsylumWeapon::HandleIncomingDamage(vec2 &Force, int &Damage, int From)
 
 void CAsylumWeapon::SkillStatus(char *pBuf, int Size)
 {
+	if(m_Item == ASYLUM_THEWORLD)
+	{
+		const int Left = ((CGameControllerHunterN *)Character()->Controller())->TheWorldCooldown(Character()->GetPlayer()->GetCID());
+		str_format(pBuf, Size, "The World | 冷却 %.1fs | 全图时停5秒 | 击杀减2秒（每次释放最多减10秒）", Left / (float)Server()->TickSpeed());
+		return;
+	}
 	if(m_Item != ASYLUM_LILYNETTE)
 	{
 		pBuf[0] = 0;
@@ -170,9 +230,10 @@ void CAsylumWeapon::SkillStatus(char *pBuf, int Size)
 	}
 	const int Now = Server()->Tick();
 	const char *pState = m_UltimateStartTick >= 0 ? (Now - m_UltimateStartTick < Server()->TickSpeed() * 6 ? "前摇" : "扫射") :
-		(m_CounterUntil > Now ? "反击窗口" : (m_Charge >= 250 && Now >= m_RNextTick ? "R就绪" : "充能"));
+		(m_CounterUntil > Now ? "反击窗口" : (m_Charge >= 250 && (IgnoreCooldown() || Now >= m_RNextTick) ? "R就绪" : "充能"));
 	str_format(pBuf, Size, "Lilynette | 充能 %d/250 | E %.1fs | R %.1fs | %s", m_Charge,
-		maximum(0, m_ENextTick - Now) / (float)Server()->TickSpeed(), maximum(0, m_RNextTick - Now) / (float)Server()->TickSpeed(), pState);
+		(IgnoreCooldown() ? 0 : maximum(0, m_ENextTick - Now)) / (float)Server()->TickSpeed(),
+		(IgnoreCooldown() ? 0 : maximum(0, m_RNextTick - Now)) / (float)Server()->TickSpeed(), pState);
 }
 
 bool CAsylumWeapon::UltimateLaserHit(CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife)
@@ -194,6 +255,8 @@ void CAsylumWeapon::FireUltimateBeam(vec2 Direction)
 void CAsylumWeapon::Tick()
 {
 	CWeapon::Tick();
+	if(m_Item == ASYLUM_THEWORLD)
+		m_ReloadTimer = ((CGameControllerHunterN *)Character()->Controller())->TheWorldCooldown(Character()->GetPlayer()->GetCID());
 	TickGodItem();
 	if(m_Item != ASYLUM_LILYNETTE)
 		return;
@@ -244,6 +307,13 @@ void CAsylumWeapon::TickPaused()
 
 int CAsylumWeapon::NumAmmoIcons()
 {
+	if(IgnoreCooldown())
+		return 10;
+	if(m_Item == ASYLUM_THEWORLD)
+	{
+		const int Left = ((CGameControllerHunterN *)Character()->Controller())->TheWorldCooldown(Character()->GetPlayer()->GetCID());
+		return clamp(10 - Left * 10 / (ASYLUM_WORLD_COOLDOWN_SECONDS * Server()->TickSpeed()), 0, 10);
+	}
 	const int FullTicks = maximum(1, m_FireDelay * Server()->TickSpeed() / 1000);
 	return clamp(10 - m_ReloadTimer * 10 / FullTicks, 0, 10);
 }
@@ -306,7 +376,8 @@ bool CAsylumWeapon::LaserHit(CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool En
 	if(Index == ASYLUM_TASER) Damage = 45 - (int)(clamp((Range - 200.0f) / 300.0f, 0.0f, 1.0f) * 15.0f);
 	const int Before = pHit->GetHealth() + pHit->GetArmor();
 	pHit->TakeDamage(vec2(0, -Item.m_Force), Damage, pLaser->GetOwner(), WEAPON_LASER, pLaser->GetWeaponID(), false);
-	if(Freeze && pHit->IsAlive() && !pHit->IsProtected() && pHit->GetHealth() + pHit->GetArmor() < Before)
+	if(Freeze && pHit->IsAlive() && !pHit->IsProtected() &&
+		(pHit->GetHealth() + pHit->GetArmor() < Before || pHit->GetPlayer()->m_AsylumTestGod))
 		pHit->Freeze(Index == ASYLUM_TASER ? 0.75f : 1.0f, true);
 	return true;
 }

@@ -19,6 +19,9 @@ enum EAsylumItem
 	ASYLUM_BANHAMMER, ASYLUM_BIRCHTREE, ASYLUM_ZENITH,
 	ASYLUM_TSARBOMB, ASYLUM_BLACKHOLE, ASYLUM_JUDGE,
 	ASYLUM_TRAIN, ASYLUM_JUMPSCARE, ASYLUM_MOYAI,
+	ASYLUM_MICROPHONE,
+	ASYLUM_MASTERSPARK,
+	ASYLUM_THEWORLD,
 	NUM_ASYLUM_ITEMS
 };
 
@@ -61,6 +64,8 @@ class CAsylumWeapon : public CWeapon
 	int m_UltimateShots;
 	int m_SlamTick;
 	int m_LastQuoteTick;
+	int m_Note;
+	int m_aMicrophoneIDs[6];
 	void Fire(vec2 Direction) override;
 	void FireUltimateBeam(vec2 Direction);
 	static bool UltimateLaserHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
@@ -78,6 +83,10 @@ class CAsylumWeapon : public CWeapon
 
 public:
 	CAsylumWeapon(CCharacter *pOwner, int Item);
+	~CAsylumWeapon() override;
+	void Snap(int SnappingClient, int OtherMode) override;
+	bool IgnoreCooldown() override;
+	void ResetCooldowns();
 	int GetType() override { return AsylumItem(m_Item).m_Type; }
 	int NumAmmoIcons() override;
 	int Item() const { return m_Item; }
@@ -140,5 +149,8 @@ using CAsylumJudge = CAsylumItem<ASYLUM_JUDGE>;
 using CAsylumTrain = CAsylumItem<ASYLUM_TRAIN>;
 using CAsylumJumpscare = CAsylumItem<ASYLUM_JUMPSCARE>;
 using CAsylumMoyai = CAsylumItem<ASYLUM_MOYAI>;
+using CAsylumMicrophone = CAsylumItem<ASYLUM_MICROPHONE>;
+using CAsylumMasterSpark = CAsylumItem<ASYLUM_MASTERSPARK>;
+using CAsylumTheWorld = CAsylumItem<ASYLUM_THEWORLD>;
 
 #endif

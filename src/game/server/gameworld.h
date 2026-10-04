@@ -4,6 +4,7 @@
 #define GAME_SERVER_GAMEWORLD_H
 
 #include "eventhandler.h"
+#include "asylum_time.h"
 #include <game/gamecore.h>
 
 #include <list>
@@ -31,6 +32,7 @@ public:
 		// entity collections
 		ENTTYPE_DDRACE,
 		ENTTYPE_CUSTOM,
+		ENTTYPE_ASYLUM_SPARK,
 
 		NUM_ENTTYPES
 	};
@@ -50,12 +52,23 @@ private:
 	class IGameController *m_pController;
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
+	CAsylumTimeStop m_TimeStop;
+	bool m_AdvanceTimeStoppedEntities;
 
 public:
 	class CGameContext *GameServer() { return m_pGameServer; }
 	class IGameController *Controller() { return m_pController; }
 	class CConfig *Config() { return m_pConfig; }
 	class IServer *Server() { return m_pServer; }
+	bool IsTimeStopped() const;
+	bool IsTimeStopActive() const;
+	bool IsClientTimeStopped(int CID) const;
+	bool IsClientFullyTimeStopped(int CID) const;
+	bool IsEntityTimeStopped(CEntity *pEntity) const;
+	bool StartTimeStop(int Owner, int DurationTicks);
+	void EndTimeStop();
+	int TimeStopVisualMillis() const;
+	void EndTimeStopFor(int CID) { if(m_TimeStop.Owner() == CID) EndTimeStop(); }
 
 	int Team() { return m_ResponsibleTeam; }
 
@@ -198,6 +211,8 @@ public:
 	void CreateDeath(vec2 Pos, int Who, int64 Mask = -1LL);
 	void CreateSound(vec2 Pos, int Sound, int64 Mask = -1LL);
 	void CreateSoundGlobal(int Sound, int64 Mask = -1LL);
+	void CreateMapSound(vec2 Pos, int Sound, int64 Mask = -1LL);
+	void CreateMapSoundGlobal(int Sound, int64 Mask = -1LL);
 };
 
 #endif

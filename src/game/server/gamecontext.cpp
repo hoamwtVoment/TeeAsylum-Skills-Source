@@ -2822,6 +2822,83 @@ void CGameContext::ConchainUpdateRoomVotes(IConsole::IResult *pResult, void *pUs
 	}
 }
 
+void CGameContext::ForwardAsylumTest(IConsole::IResult *pResult, const char *pCommand, bool Items)
+{
+	const bool HasTarget = !Items || pResult->NumArguments() > 0;
+	const int CID = HasTarget ? pResult->GetInteger(0) : pResult->m_ClientID;
+	if(HasTarget && (CID < 0 || CID >= MAX_CLIENTS || !m_apPlayers[CID]))
+	{
+		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum_test", "玩家 ID 无效或玩家未连接。");
+		return;
+	}
+	SGameInstance Instance = {};
+	if(CID >= 0 && CID < MAX_CLIENTS && m_apPlayers[CID])
+		Instance = PlayerGameInstance(CID);
+	else
+	{
+		// Local/econ console has no player. Item IDs are common to all Asylum
+		// modes: use the first ready Asylum room when no CID was supplied.
+		for(int Room = 0; Room < MAX_CLIENTS; ++Room)
+		{
+			SGameInstance Candidate = GameInstance(Room);
+			if(Candidate.m_Init && Candidate.m_pController &&
+				Candidate.m_pController->InstanceConsole()->GetCommandInfo(pCommand, CFGFLAG_INSTANCE, false))
+			{
+				Instance = Candidate;
+				break;
+			}
+		}
+	}
+	if(!Instance.m_Init || !Instance.m_pController ||
+		!Instance.m_pController->InstanceConsole()->GetCommandInfo(pCommand, CFGFLAG_INSTANCE, false))
+	{
+		Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum_test", "当前没有就绪的 Tee Asylum 房间，或目标玩家不在该模式中。");
+		return;
+	}
+	// Reuse the same validated handlers as room_setting. Command names are
+	// fixed by the callbacks below; only canonical integer arguments are passed.
+	char aCommand[256];
+	str_copy(aCommand, pCommand, sizeof(aCommand));
+	if(!Items)
+		for(int i = 0; i < pResult->NumArguments(); ++i)
+		{
+			char aArgument[32];
+			str_format(aArgument, sizeof(aArgument), " %d", pResult->GetInteger(i));
+			str_append(aCommand, aArgument, sizeof(aCommand));
+		}
+	Instance.m_pController->InstanceConsole()->ExecuteLineFlag(aCommand, CFGFLAG_INSTANCE, pResult->m_ClientID, false);
+}
+
+void CGameContext::ConAsylumTestNoCooldown(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_nocd");
+}
+
+void CGameContext::ConAsylumTestResetCooldown(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_reset_cd");
+}
+
+void CGameContext::ConAsylumTestGod(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_god");
+}
+
+void CGameContext::ConAsylumTestWeapon(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_weapon");
+}
+
+void CGameContext::ConAsylumTestLoadout(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_loadout");
+}
+
+void CGameContext::ConAsylumTestItems(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_items", true);
+}
+
 void CGameContext::OnConsoleInit()
 {
 	m_pServer = Kernel()->RequestInterface<IServer>();
@@ -2862,6 +2939,12 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("add_gametypefile", "s[name] s[gametype] r[filename]", CFGFLAG_SERVER, ConAddGameTypeFile, this, "Register an gametype for rooms. First register will be the default for room 0");
 	Console()->Register("mega_add_mapname", "r[name]", CFGFLAG_SERVER, ConAddMapName, this, "Mega map sub map names. Add it in order of map indexes, starting from map 1.");
 	Console()->Register("room_setting", "i[room] ?r[settings]", CFGFLAG_SERVER, ConRoomSetting, this, "Invoke a command in a specified room");
+	Console()->Register("asylum_test_nocd", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumTestNoCooldown, this, "Test: toggle no cooldowns (0/1); target player's room is automatic");
+	Console()->Register("asylum_test_reset_cd", "i[cid]", CFGFLAG_SERVER, ConAsylumTestResetCooldown, this, "Test: reset weapon/skill/The World cooldowns once in the target player's room");
+	Console()->Register("asylum_test_god", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumTestGod, this, "Test: toggle invulnerability (0/1); target player's room is automatic");
+	Console()->Register("asylum_test_weapon", "i[cid] i[item]", CFGFLAG_SERVER, ConAsylumTestWeapon, this, "Test: replace and select one item by ID; room and slot are automatic");
+	Console()->Register("asylum_test_loadout", "i[cid] i[melee] i[ranged] i[utility]", CFGFLAG_SERVER, ConAsylumTestLoadout, this, "Test: equip three items in the target player's current room");
+	Console()->Register("asylum_test_items", "?i[cid]", CFGFLAG_SERVER, ConAsylumTestItems, this, "Test: list item IDs in your room, optional target CID, or first ready Asylum room");
 
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 	Console()->Chain("sv_room", ConchainUpdateRoomVotes, this);

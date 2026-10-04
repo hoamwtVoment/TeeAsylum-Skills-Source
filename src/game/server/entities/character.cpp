@@ -259,6 +259,8 @@ void CCharacter::HandleWeaponSwitch()
 
 void CCharacter::FireWeapon()
 {
+	if(GameWorld()->IsClientFullyTimeStopped(m_pPlayer->GetCID()))
+		return;
 	DoWeaponSwitch();
 
 	CWeapon *pCurrentWeapon = CurrentWeapon();
@@ -366,6 +368,8 @@ void CCharacter::SetEmote(int Emote, int Tick)
 
 void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 {
+	if(GameWorld()->IsClientFullyTimeStopped(m_pPlayer->GetCID()))
+		return;
 	// check for changes
 	if(mem_comp(&m_SavedInput, pNewInput, sizeof(CNetObj_PlayerInput)) != 0)
 		m_LastAction = Server()->Tick();
@@ -383,6 +387,18 @@ void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 
 void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 {
+	if(GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID()))
+	{
+		// During slowdown queue input until this character's next virtual Tick.
+		// During the full stop consume edges instead of banking an attack burst.
+		mem_copy(&m_LatestInput, pNewInput, sizeof(m_LatestInput));
+		if(m_LatestInput.m_TargetX == 0 && m_LatestInput.m_TargetY == 0)
+			m_LatestInput.m_TargetY = -1;
+		if(GameWorld()->IsClientFullyTimeStopped(m_pPlayer->GetCID()))
+			m_LatestPrevInput = m_LatestPrevPrevInput = m_LatestInput;
+		Antibot()->OnDirectInput(m_pPlayer->GetCID());
+		return;
+	}
 	mem_copy(&m_LatestPrevInput, &m_LatestInput, sizeof(m_LatestInput));
 	mem_copy(&m_LatestInput, pNewInput, sizeof(m_LatestInput));
 
@@ -392,7 +408,8 @@ void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 
 	Antibot()->OnDirectInput(m_pPlayer->GetCID());
 
-	if(m_NumInputs > 2 && m_pPlayer->GetTeam() != TEAM_SPECTATORS)
+	if(m_NumInputs > 2 && m_pPlayer->GetTeam() != TEAM_SPECTATORS &&
+		!GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID()))
 	{
 		HandleWeaponSwitch();
 		FireWeapon();
@@ -447,7 +464,11 @@ void CCharacter::Tick()
 	}
 
 	// handle Weapons
+	if(GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID()))
+		HandleWeaponSwitch();
 	HandleWeapons();
+	if(GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID()))
+		m_LatestPrevInput = m_LatestPrevPrevInput = m_LatestInput;
 
 	DDRacePostCoreTick();
 
@@ -574,6 +595,8 @@ void CCharacter::TickDefered()
 
 void CCharacter::TickPaused()
 {
+	if(GameWorld()->IsTimeStopped())
+		m_Core.ResetDragVelocity();
 	++m_DamageTakenTick;
 	++m_ReckoningTick;
 	if(m_LastAction != -1)
@@ -610,6 +633,9 @@ bool CCharacter::IncreaseArmor(int Amount)
 
 void CCharacter::Die(int Killer, int Weapon)
 {
+	// Keep explicit K/admin/room cleanup working even in testing god mode.
+	if(m_pPlayer->m_AsylumTestGod && Weapon != WEAPON_SELF && Weapon != WEAPON_GAME)
+		return;
 	if(Server()->IsRecording(m_pPlayer->GetCID()))
 		Server()->StopRecord(m_pPlayer->GetCID());
 
@@ -691,6 +717,10 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon, int Weapo
 
 	if((DamageFlag & DAMAGE_SKIP) == DAMAGE_SKIP)
 		return true;
+	// Testing god mode locks health/armor, not the entire hit pipeline. Keep
+	// forces, hit sounds, pain emotes and damage indicators for weapon testing.
+	if(m_pPlayer->m_AsylumTestGod && Dmg > 0)
+		DamageFlag |= DAMAGE_NO_DAMAGE | DAMAGE_NO_DEATH;
 
 	if(!(DamageFlag & DAMAGE_NO_KNOCKBACK))
 	{
@@ -824,7 +854,8 @@ void CCharacter::SnapCharacter(int SnappingClient, int MappedID)
 	int Tick, Emote = m_EmoteType, Weapon = pCurrentWeapon ? pCurrentWeapon->GetType() : m_ActiveWeaponSlot, AmmoCount = 0,
 		  Health = 0, Armor = 0, AttackTick = pCurrentWeapon ? pCurrentWeapon->GetAttackTick() : 0;
 
-	if(!m_ReckoningTick || GameWorld()->m_Paused)
+	const bool TimeStopped = GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID());
+	if(!m_ReckoningTick || GameWorld()->m_Paused || TimeStopped)
 	{
 		Tick = 0;
 		pCore = &m_Core;
@@ -973,11 +1004,13 @@ void CCharacter::SnapCharacter(int SnappingClient, int MappedID)
 		pCharacter->m_PlayerFlags = GetPlayer()->m_PlayerFlags;
 
 		// HACK: no shaking during pause / round end
-		if(GameWorld()->m_Paused)
+		if(GameWorld()->m_Paused || TimeStopped)
 		{
 			pCharacter->m_VelX = 0;
 			pCharacter->m_VelY = 0;
 			pCharacter->m_AttackTick = 0;
+			if(TimeStopped)
+				pCharacter->m_Direction = 0;
 		}
 
 		// note: not used, 0.6 doesn't have a progress bar
@@ -1009,6 +1042,12 @@ void CCharacter::SnapCharacter(int SnappingClient, int MappedID)
 		pCharacter->m_Health = Health;
 		pCharacter->m_Armor = Armor;
 		pCharacter->m_TriggeredEvents = 0;
+		if(TimeStopped)
+		{
+			pCharacter->m_VelX = pCharacter->m_VelY = 0;
+			pCharacter->m_AttackTick = 0;
+			pCharacter->m_Direction = 0;
+		}
 	}
 }
 
@@ -1067,6 +1106,8 @@ void CCharacter::Snap(int SnappingClient, int OtherMode)
 	CWeapon *pWeapon = CurrentWeapon();
 	if(pWeapon && pWeapon->GetType() == WEAPON_NINJA)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_WEAPON_NINJA;
+	if(pWeapon)
+		pWeapon->Snap(SnappingClient, OtherMode);
 
 	pDDNetCharacter->m_FreezeEnd = m_DeepFreeze ? -1 : m_FreezeTime == 0 ? 0 :
                                                                                Server()->Tick() + m_FreezeTime;
@@ -1277,7 +1318,7 @@ void CCharacter::HandleTiles(int Index)
 	// deep freeze
 	if(((m_TileIndex == TILE_DFREEZE) || (m_TileFIndex == TILE_DFREEZE)) && !m_Super && !m_DeepFreeze)
 	{
-		m_DeepFreeze = true;
+		DeepFreeze();
 	}
 	else if(((m_TileIndex == TILE_DUNFREEZE) || (m_TileFIndex == TILE_DUNFREEZE)) && !m_Super && m_DeepFreeze)
 	{
@@ -1490,7 +1531,7 @@ void CCharacter::HandleTiles(int Index)
 	else if(GameServer()->Collision()->IsSwitch(MapIndex) == TILE_DFREEZE && Team() != TEAM_SUPER)
 	{
 		if(GameServer()->Collision()->GetSwitchNumber(MapIndex) == 0 || GameServer()->Collision()->m_pSwitchers[GameServer()->Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()])
-			m_DeepFreeze = true;
+			DeepFreeze();
 	}
 	else if(GameServer()->Collision()->IsSwitch(MapIndex) == TILE_DUNFREEZE && Team() != TEAM_SUPER)
 	{

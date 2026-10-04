@@ -282,6 +282,8 @@ void CProjectile::FillInfo(CNetObj_Projectile *pProj)
 
 bool CProjectile::NetworkClipped(int SnappingClient)
 {
+	if(GameWorld()->IsTimeStopped())
+		return NetworkPointClipped(SnappingClient, m_Pos);
 	float Ct = (Server()->Tick() - m_StartTick) / (float)Server()->TickSpeed();
 	return NetworkPointClipped(SnappingClient, GetPos(Ct));
 }
@@ -291,6 +293,21 @@ void CProjectile::Snap(int SnappingClient, int OtherMode)
 	// don't snap projectiles that is disowned for other mode
 	if(m_Owner == -2 && OtherMode)
 		return;
+	if(GameWorld()->IsTimeStopped())
+	{
+		// The caster's client is not paused: send a stationary snapshot as well
+		// as freezing the authoritative start tick/lifespan. No extrapolation.
+		CNetObj_Projectile *pProj = (CNetObj_Projectile *)Server()->SnapNewItem(NETOBJTYPE_PROJECTILE, m_ID, sizeof(CNetObj_Projectile));
+		if(pProj)
+		{
+			pProj->m_X = round_to_int(m_Pos.x);
+			pProj->m_Y = round_to_int(m_Pos.y);
+			pProj->m_VelX = pProj->m_VelY = 0;
+			pProj->m_StartTick = Server()->Tick();
+			pProj->m_Type = m_Type;
+		}
+		return;
+	}
 
 	int Tick = (Server()->Tick() % Server()->TickSpeed()) % 10;
 	if(m_Layer == LAYER_SWITCH && m_Number > 0 && !GameServer()->Collision()->m_pSwitchers[m_Number].m_Status[GameWorld()->Team()] && (!Tick))

@@ -1,4 +1,4 @@
-/* Tee Asylum god-tier (★) item effects: meme sound sequences and summoned entities. */
+/* Tee Asylum god-tier (★) item effects and summoned entities. */
 #ifndef GAME_SERVER_ENTITIES_ASYLUM_FX_H
 #define GAME_SERVER_ENTITIES_ASYLUM_FX_H
 
@@ -9,8 +9,7 @@ class CCharacter;
 class CEntity;
 class CGameWorld;
 
-// Standard DDNet clients can only play their built-in samples, so the
-// "mysterious" sounds are timed sequences of stock sounds.
+// Short built-in cues; Vine Boom uses the user-provided embedded map sample.
 enum EAsylumMeme
 {
 	ASYLUM_MEME_BONK,
@@ -35,6 +34,13 @@ enum EAsylumMeme
 // Plays a meme at Pos. Global sounds play at full volume regardless of
 // distance; Mask limits either kind to some clients of this world.
 void AsylumPlayMeme(CGameWorld *pWorld, int Meme, vec2 Pos, bool Global = false, int64 Mask = -1LL);
+
+// Names are resolved against the loaded map, so map-specific sample indices
+// and existing mapper sounds do not get confused with built-in SOUND_* IDs.
+bool AsylumPlayMapSound(CGameWorld *pWorld, const char *pName, vec2 Pos, bool Global = false, int64 Mask = -1LL);
+bool AsylumHasJumpscareMap(CGameWorld *pWorld);
+bool AsylumHasTimeStopMap(CGameWorld *pWorld);
+void AsylumSpawnNote(CGameWorld *pWorld, int Owner, int WeaponID, vec2 Pos, vec2 Direction, int Note, int Damage, float Force);
 
 // Writes ASCII text into the world with laser dots for a few seconds.
 void AsylumShowText(CGameWorld *pWorld, vec2 Pos, const char *pText, float Seconds, int Gap = 7);

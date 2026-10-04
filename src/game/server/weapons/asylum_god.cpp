@@ -2,6 +2,7 @@
 #include "asylum.h"
 
 #include <game/server/entities/asylum_fx.h>
+#include <game/server/entities/asylum_spark.h>
 #include <game/server/entities/laser.h>
 #include <game/server/entities/projectile.h>
 #include <game/server/gamecontext.h>
@@ -90,6 +91,8 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 		return true;
 	}
 	case ASYLUM_BIRCHTREE:
+		if(IgnoreCooldown() && m_SlamTick >= 0)
+			return true; // No-cooldown tests must not perpetually restart the wind-up.
 		// The slam lands in TickGodItem after the tree has said its piece.
 		m_SlamTick = Server()->Tick() + Server()->TickSpeed() * 4 / 5;
 		AsylumPlayMeme(GameWorld(), ASYLUM_MEME_RUSTLE, Pos());
@@ -149,14 +152,16 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 			const int Victim = pTarget->GetPlayer()->GetCID();
 			const int Before = pTarget->GetHealth() + pTarget->GetArmor();
 			pTarget->TakeDamage(vec2(0.0f, 0.0f), Item.m_Damage, CID, WEAPON_HAMMER, GetWeaponID(), false);
-			// Like the freeze ray, a blocked hit (mantle, shield) does not freeze.
-			if(pTarget->IsAlive() && !pTarget->IsProtected() && pTarget->GetHealth() + pTarget->GetArmor() < Before)
+			// Real shields still block freezing; testing god mode only locks HP.
+			if(pTarget->IsAlive() && !pTarget->IsProtected() &&
+				(pTarget->GetHealth() + pTarget->GetArmor() < Before || pTarget->GetPlayer()->m_AsylumTestGod))
 				pTarget->Freeze(1.0f, true);
-			AsylumPlayMeme(GameWorld(), ASYLUM_MEME_SCREAM, pTarget->m_Pos, true, CmaskOneAndViewer(Victim));
+			if(!AsylumPlayMapSound(GameWorld(), "vine_boom", pTarget->m_Pos, true, CmaskOneAndViewer(Victim)))
+				GameWorld()->CreateSoundGlobal(SOUND_GRENADE_EXPLODE, CmaskOneAndViewer(Victim));
 			Hunter(Character())->ShowScreenText(Victim, "\n\n\n!!!!!!!!!!!!!!!!!!!!!!!!\nGET OUT OF MY HEAD\n!!!!!!!!!!!!!!!!!!!!!!!!", 1.2f);
+			Hunter(Character())->ShowJumpscare(Victim, ASYLUM_JUMPSCARE_FADE_MS / 1000.0f);
 			GameWorld()->CreateDamageIndCircle(pTarget->m_Pos, false, 0.0f, 8, 8, 1.2f);
 		}
-		AsylumPlayMeme(GameWorld(), ASYLUM_MEME_HEARTBEAT, Pos());
 		GameWorld()->CreateDeath(Pos(), CID);
 		return true;
 	}
@@ -172,6 +177,35 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 		// Turned to stone: motionless and immune for a moment.
 		Character()->Core()->m_Vel = vec2(0.0f, 0.0f);
 		Character()->Protect(1.0f, false);
+		return true;
+	}
+	case ASYLUM_MICROPHONE:
+	{
+		const int Note = m_Note % 4;
+		m_Note = (m_Note + 1) % 4;
+		const char *const aapNotes[][5] = {
+			{"bf_bep_short", "bf_bai_short", "bf_dah_short", "bf_ai_short", "bf_ko_short"},
+			{"bf_boa_short", "bf_duh_short", "bf_ooh_short", "bf_uhh_short", "bf_auh_medium"},
+			{"bf_bee_short", "bf_eeh_short", "bf_ees_short", "bf_pee_short", "bf_eeh_medium"},
+			{"bf_ah_short", "bf_ayy_short", "bf_dai_short", "bf_eah_short", "bf_euh_short"}};
+		AsylumSpawnNote(GameWorld(), CID, GetWeaponID(), Pos() + Direction * 32.0f, Direction, Note, Item.m_Damage, Item.m_Force);
+		if(!AsylumPlayMapSound(GameWorld(), aapNotes[Note][secure_rand_below(5)], Pos()))
+			GameWorld()->CreateSound(Pos(), SOUND_HOOK_NOATTACH);
+		return true;
+	}
+	case ASYLUM_MASTERSPARK:
+		for(CEntity *pEntity = GameWorld()->FindFirst(CGameWorld::ENTTYPE_ASYLUM_SPARK); pEntity; pEntity = pEntity->TypeNext())
+			if(static_cast<CMasterSpark *>(pEntity)->IsCasting(CID, GetWeaponID()))
+				return true; // No cooldown does not mean overlapping channelled beams.
+		new CMasterSpark(GameWorld(), CID, GetWeaponID(), Pos(), Direction, Item.m_Damage);
+		AsylumShowText(GameWorld(), Pos() - vec2(0.0f, 90.0f), "MASTER SPARK", 0.6f);
+		GameWorld()->CreateSound(Pos(), SOUND_LASER_FIRE);
+		return true;
+	case ASYLUM_THEWORLD:
+	{
+		CGameControllerHunterN *pHunter = Hunter(Character());
+		pHunter->ActivateTheWorld(CID);
+		m_ReloadTimer = maximum(1, pHunter->TheWorldCooldown(CID));
 		return true;
 	}
 	}
@@ -260,7 +294,10 @@ bool CAsylumWeapon::JudgeHit(CProjectile *pProj, vec2 Pos, CCharacter *pHit, boo
 	{
 		const int Before = pHit->GetHealth() + pHit->GetArmor();
 		pHit->TakeDamage(vec2(0.0f, 0.0f), 10, Owner, WEAPON_GUN, WeaponID, false);
-		if(pHit->IsAlive() && !pHit->IsProtected() && pHit->GetHealth() + pHit->GetArmor() < Before)
+		const bool GodTargetHit = pHit->GetPlayer()->m_AsylumTestGod &&
+			Hunter(pProj)->CanWeaponInteract(Owner, pHit->GetPlayer()->GetCID(), WeaponID);
+		if(pHit->IsAlive() && !pHit->IsProtected() &&
+			(pHit->GetHealth() + pHit->GetArmor() < Before || GodTargetHit))
 			pHit->Freeze(1.5f, true);
 		AsylumPlayMeme(pWorld, ASYLUM_MEME_ERROR, HitPos);
 		break;
