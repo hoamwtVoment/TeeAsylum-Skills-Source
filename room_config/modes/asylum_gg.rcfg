@@ -1,3 +1,5 @@
+# Fixed 17-stage progression; no extra skills, kill modules or regeneration.
+# Magazine weapons still reload automatically when empty.
 exec "room_config/asylum-common.rcfg"
 scorelimit 17
 timelimit 0

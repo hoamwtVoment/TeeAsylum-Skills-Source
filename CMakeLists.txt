@@ -601,6 +601,26 @@ set(EXPECTED_DATA
   languages/traditional_chinese.txt
   languages/turkish.txt
   languages/ukrainian.txt
+  map-music/asylum_10hourburstman.opus
+  map-music/asylum_10hourburstman_phase2.opus
+  map-music/asylum_lobby_propaganda.opus
+  maps/asylum_10hourburstman.map
+  maps/asylum_crossroads.map
+  maps/asylum_lobby_arcade.map
+  maps/asylum_lobby_atrium.map
+  maps/asylum_lobby_propaganda.map
+  maps/asylum_rooftops.map
+  maps/ctf3.map
+  maps/ctf7.map
+  maps/dm1.map
+  maps/dm9.map
+  maps/hunter1.map
+  maps/hunter2.map
+  maps/hunter3.map
+  maps/hunter4.map
+  maps/hunter5.map
+  maps/hunter6.map
+  maps/hunter8.map
   maps/huntern_msc.map
   maps/huntern_msc.map.cfg
   maps/license.txt
@@ -612,7 +632,7 @@ set(EXPECTED_DATA
   wordlist.txt
 )
 
-set_glob(DATA GLOB_RECURSE "json;map;png;txt;vert;cfg" data ${EXPECTED_DATA})
+set_glob(DATA GLOB_RECURSE "json;map;opus;png;txt;vert;cfg" data ${EXPECTED_DATA})
 
 ########################################################################
 # COPY DATA AND DLLS
@@ -938,6 +958,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   classes.h
   ddracechat.cpp
   ddracecommands.cpp
+  entities/asylum_visual_laser.cpp
+  entities/asylum_visual_laser.h
   entities/character.cpp
   entities/character.h
   entities/door.cpp
@@ -979,6 +1001,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamemodes/dm.h
   gamemodes/huntern.cpp
   gamemodes/huntern.h
+  gamemodes/huntern_tour.cpp
   gamemodes/instagib.cpp
   gamemodes/instagib.h
   gamemodes/lms.cpp

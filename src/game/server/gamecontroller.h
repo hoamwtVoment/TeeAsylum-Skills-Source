@@ -601,6 +601,9 @@ public:
 			Usually this is not needed
 	*/
 	virtual void OnSnap(int SnappingClient){};
+	// Reserved elapsed-time bank used by synchronized map music envelopes.
+	// Does not change the authoritative gameplay clock or countdown.
+	virtual int MapMusicOffsetSeconds() const { return 0; }
 
 	// =================
 	//    GAME EVENTS
@@ -737,6 +740,15 @@ public:
 	// Damage unit used by custom combat modes. Vanilla modes retain one-point
 	// health/armor units while high-health modes can scale damage consistently.
 	virtual int CombatDamageUnit() const { return 1; };
+	// Optional non-player combat target. Segment tests must stop at map walls.
+	virtual bool IntersectCombatNpc(vec2 From, vec2 To, float Radius, vec2 *pHit) { return false; }
+	// Returns actual health lost (zero for an immune/invalid target).
+	virtual int DamageCombatNpc(int From, int WeaponID, int Damage) { return 0; }
+	virtual int DamageCombatNpcBox(int From, int WeaponID, int Damage, vec2 Origin, vec2 Aim, float Reach, float HalfWidth) { return 0; }
+	virtual bool IsAdminInvincible(int CID) const { return false; }
+	virtual void ExplosionCombatNpc(vec2 Pos, int From, int WeaponID, int Damage) {}
+	virtual int CombatNpcWeaponDamage(int From, int WeaponID) { return 0; }
+	virtual float BaseWalkspeedTiles() const { return -1.0f; }
 	// Called after damage has actually been applied (armor and health loss are
 	// already resolved), before a possible Die() callback.
 	virtual void OnCharacterDamageApplied(class CCharacter *pChr, int From, int WeaponID, int HealthLoss, int ArmorLoss) {}

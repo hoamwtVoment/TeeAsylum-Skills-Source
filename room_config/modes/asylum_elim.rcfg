@@ -1,3 +1,4 @@
+# Three lives; kills add 20 maximum HP up to 200, then the safe zone shrinks.
 exec "room_config/asylum-common.rcfg"
 scorelimit 0
 timelimit 0

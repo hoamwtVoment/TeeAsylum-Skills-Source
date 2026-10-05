@@ -19,7 +19,7 @@ CLaser::CLaser(
 	vec2 Direction,
 	float StartEnergy,
 	FLaserImpactCallback Callback,
-	SEntityCustomData CustomData) :
+	SEntityCustomData CustomData, int NpcDamage) :
 	CEntity(pGameWorld, CGameWorld::ENTTYPE_LASER)
 {
 	m_Pos = Pos;
@@ -32,6 +32,7 @@ CLaser::CLaser(
 	m_WasTele = false;
 	m_Type = WeaponType;
 	m_WeaponID = WeaponID;
+	m_NpcDamage = NpcDamage;
 	m_TuneZone = GameServer()->Collision()->IsTune(GameServer()->Collision()->GetMapIndex(m_Pos));
 	m_Hit = 0;
 	m_IsSolo = false;
@@ -59,6 +60,16 @@ bool CLaser::HitCharacter(vec2 From, vec2 To)
 {
 	CCharacter *pOwnerChar = GameServer()->GetPlayerChar(m_Owner);
 	bool IsProtectingOwner = m_Bounces == 0 && !m_WasTele;
+	vec2 NpcPos;
+	if(GameWorld()->Controller()->IntersectCombatNpc(From, To, 0.0f, &NpcPos))
+	{
+		GameWorld()->Controller()->DamageCombatNpc(m_Owner, m_WeaponID,
+			m_NpcDamage >= 0 ? m_NpcDamage : GameWorld()->Controller()->CombatNpcWeaponDamage(m_Owner, m_WeaponID));
+		m_From = From;
+		m_Pos = NpcPos;
+		m_Energy = -1;
+		return true;
+	}
 
 	std::list<CCharacter *> pTargetChars;
 

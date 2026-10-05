@@ -36,6 +36,7 @@ jobs:
         sudo apt-get install libsqlite3-dev cmake -y
 
     - name: Build in release mode
+      env: ${{ matrix.env }}
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=./
         cmake --build ./ --config Release
@@ -50,10 +51,12 @@ jobs:
         dir=artifacts/TeeAsylum-Expansion
         mkdir -p $dir/data
         cp ${{ matrix.build-file }} $dir/${{ matrix.server-file }}
-        cp -r data/maps data/maps7 $dir/data/
+        cp -r data/maps data/maps7 data/map-music $dir/data/
         cp -r room_config $dir/
         rm -r $dir/room_config/mapfiles
-        cp package/autoexec.cfg package/storage.cfg license.txt $dir/
+        cp package/*.cfg license.txt $dir/
+        cp -r client-skins $dir/
+        cp README.md $dir/
         if [ "$RUNNER_OS" = Windows ]; then
           cp package/Start-TeeAsylum.cmd sqlite3.dll $dir/
         fi

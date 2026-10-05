@@ -103,8 +103,15 @@ public:
 	virtual int GetType() { return WEAPON_HAMMER; }
 	// whether this weapon makes character ignore hook drag force
 	virtual bool IgnoreHookDrag() { return false; }
+	virtual bool BlocksHook() const { return false; }
+	virtual bool OverrideAim(vec2 &Direction) const { return false; }
 	// powerup progress, only used for progress indicator (0~1, 0 being just started, 1 being finished)
 	virtual float PowerupProgress() { return 0.0f; }
+	virtual float WalkspeedBonusTiles() { return 0.0f; }
+	virtual float FixedWalkspeedTiles() { return -1.0f; }
+	virtual float AttackMultiplier() const { return 1.0f; }
+	virtual float DefensePercent() const { return 0.0f; }
+	virtual bool CanUseWhileFrozen() const { return false; }
 };
 
 #endif // GAME_SERVER_WEAPON_H

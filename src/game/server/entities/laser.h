@@ -19,7 +19,7 @@ public:
 		vec2 Direction,
 		float StartEnergy,
 		FLaserImpactCallback Callback = nullptr,
-		SEntityCustomData CustomData = {nullptr, nullptr});
+		SEntityCustomData CustomData = {nullptr, nullptr}, int NpcDamage = -1);
 	~CLaser();
 
 	virtual void Reset() override;
@@ -42,6 +42,7 @@ private:
 	int m_EvalTick;
 	int m_Owner;
 	int m_WeaponID;
+	int m_NpcDamage;
 	FLaserImpactCallback m_Callback;
 	SEntityCustomData m_CustomData;
 

@@ -1,76 +1,70 @@
-Tee Asylum
-===
-> 源码由 [101024awa](https://github.com/101024awa) 提供，[hoamwtVoment](https://github.com/hoamwtVoment) 代为上传。
+# Tee Asylum Inventory / Tour
 
-随机三槽武器 PvP 模式，灵感来自 Roblox 的 [Item Asylum](https://itemasylum.wiki/Item_asylum)，由 [Bamcane/DDNet-Teeworlds-Hunter](https://github.com/Bamcane/DDNet-Teeworlds-Hunter)（猎人杀）改编而来。普通 DDNet 客户端即可连接。
+> 源码与本轮背包、普通装备、Boss 战扩展由 [101024awa](https://github.com/101024awa) 提供，[hoamwtVoment](https://github.com/hoamwtVoment) 整理上传。
 
-本版加入 Item Asylum 风格的 6 种模式和 12 件新装备，装备总数 24。玩法参考 [Item Asylum Wiki](https://itemasylum.wiki/Item_asylum)，并按 DDNet 的二维移动、血量、投射物和网络协议做了适配。
+基于 DDNet-HunterN 的 Item Asylum 风格二维服务器，普通 DDNet 客户端即可连接。当前为 **36 件出生随机装备、5 个升级模块、5 件升级武器，总目录 46 项**；保留 FFA、TDM、GG、ELIM、ZS、JGN，新增默认大厅巡回 `asylum_tour` 和 **10 Hour Burst Man 两阶段 AI Boss**。
 
-怎么玩
----
-每次出生随机获得近战、远程、特殊各一件装备。按 `1/2/3` 或滚轮切换槽位，左键使用。特殊模式的槽位内容会随身份变化，以聊天和屏幕上的装备提示为准。
+## 玩法
 
-投票菜单可以切换模式、地图、重开比赛，或创建独立房间，默认是 FFA。至少两名玩家进入同一房间才会开始正式比赛。
+- 大厅没有武器，每轮从 16 张战斗图抽取 3 张，触碰 1/2/3 号选图板投票；45 秒后切换，战斗结束返回大厅。巡回支持一人游玩，无人时停止大厅倒计时。
+- 随机池为 7 近战、21 远程、8 特殊。按 `1/2/3` 切换，左键使用；升级模块放在槽位 4，按 `4` 后左键消耗模块升级远程武器。
+- M1911、Pixel gun、9mm、Suppressed pistol、SSG-08 分别达到 5/5/4/6/10 次本武器有效击杀后获得升级模块。
+- 有限弹匣、空弹自动装填、R 主动装填；America、Medkit、Holy Mantle 使用一次后对应物品槽消失。Darkheart、Lilynette、Blaster 有专属技能。
+- 普通角色 100 HP、零出生护甲；脱战 5 秒后每秒回复最大生命的 2.5%，GG 不回血。
+- Boss 每名挑战者 6 命，生命随人数增加；半血后回满进入第二阶段，速度提高、承伤翻倍，并切换阶段音乐。
 
-游戏模式
----
-| 模式 | 规则 |
-|---|---|
-| [FFA](https://itemasylum.wiki/FFA) 自由混战 | 每次出生随机近战、远程、特殊各一件；击杀 +1，自杀或环境死亡 -1；25 分或 8 分钟结算，平分加时。 |
-| [TDM](https://itemasylum.wiki/Tdm) 团队死斗 | 红蓝两队，队友免伤；团队 75 分或 6 分钟结算，平分加时。 |
-| [GG](https://itemasylum.wiki/GG) 武器升级赛 | 槽位 1 是进阶武器，槽位 2 急救包，槽位 3 冲刺；必须用当前进阶武器击杀才升级，共 17 个阶段，最后用“黄金勺”获胜。死亡保留进度。 |
-| [ELIM](https://itemasylum.wiki/ELIM) 三命淘汰 | 每人 3 命，死亡重抽；每次击杀生命上限 +2，最多 20；命数耗尽进入观战。3 分钟后开启收缩安全区，圈外每秒损失 1 生命，最后存活者获胜。 |
-| [ZS](https://itemasylum.wiki/ZS) 感染生存 | 随机选出初始感染者；生还者死亡后变成感染者，感染者无限复活，同阵营免伤。生还者撑过 4 分钟获胜，每次新感染延长 15 秒；全员感染则感染者获胜。 |
-| [JGN](https://itemasylum.wiki/JGN) 巨人讨伐 | 随机一人当巨人，只有 1 命，生命上限随人数在 60 到 200 之间，免击退。挑战者各 3 命且互相免伤。巨人被击败或 4 分钟结束时挑战者获胜，挑战者全部淘汰则巨人获胜。 |
+Boss 第一阶段使用 Darkheart 三连冲刺、Twilight、Star Platinum、Vampirism 抓取拖拽和霰弹枪；第二阶段增加 Grand Volley、Strong Left。Boss 生命为 `2000 + 666 ×（人数−1）`，上限 11990，使用同一场地，不整体传送玩家。
 
-ELIM、ZS、JGN 开局锁定名单，中途加入、离开重进或切到观战再回来的玩家要等下一局。每局结束后自动开始下一局。
+## 启动与配置
 
-装备
----
-一般角色 10 生命、2 护甲；默认死亡 2 秒后复活，出生保护 1 秒（攻击会解除），弹药无限。FFA 共有 7 × 9 × 8 = 504 种三槽组合。
+从 Actions 下载 Windows/Linux 产物，解压后使用包内配置启动：
 
-| 类别 | 装备 |
-|---|---|
-| 近战（7） | 平底锅、小刀、球棒、巨大汤勺、黑心剑、能量剑、垂死平底锅 |
-| 远程（9） | 左轮、冲锋枪、霰弹枪、电磁炮、榴弹炮、弩、冰冻射线、英式火箭筒、America |
-| 特殊（8） | 急救包、冲刺汽水、冲击波、破片雷、神圣斗篷、重抽骰子、滑翔伞、连斩 |
-
-新增装备：
-- [巨大汤勺](https://itemasylum.wiki/Comically_large_spoon)：扩大近战范围，强击退。
-- [黑心剑](https://itemasylum.wiki/Darkheart)：命中敌人回复 1 生命。
-- [能量剑](https://itemasylum.wiki/Energy_sword)：快速的 4 伤害斩击。
-- [垂死平底锅](https://itemasylum.wiki/Dying_pan)：命中时向下击退。
-- [弩](https://itemasylum.wiki/Crossbow)：8 伤害，远距离命中最多 10。
-- [冰冻射线](https://itemasylum.wiki/Freeze_ray)：1 伤害并冻结 1 秒。
-- [英式火箭筒](https://itemasylum.wiki/British_bazooka)：随机发射 2 伤害软弹或 5 伤害爆炸弹。
-- [America](https://itemasylum.wiki/America)：10 伤害激光，后坐力很大；JGN 的随机装备池里禁用。
-- [神圣斗篷](https://itemasylum.wiki/Holy_mantle)：抵挡下一次攻击，破盾后有 0.25 秒保护，20 秒充能。
-- [重抽骰子](https://itemasylum.wiki/Re-roll_dice)：原地重抽三槽装备，不恢复血甲，10 秒冷却。
-- [滑翔伞](https://itemasylum.wiki/Parasol)：持有时减缓下落，使用可以上升。
-- [连斩](https://itemasylum.wiki/Cleave)：原作的连续斩击合并为前方一次 4 伤害斩击，10 秒冷却。
-
-与原作的差异
----
-原作通常是 100 HP，这里沿用 DDNet 较小的生命值刻度，伤害经过缩放和联机平衡调整，不能直接照搬 Wiki 上的数字。原作的三维布娃娃、爆头、肢体动画、模型、音乐和特殊界面没有导入，装备效果用 DDNet 现有的锤击、激光、投射物、冻结、击退、音效和文字提示来表现。
-
-Wiki 上的 BOSS、MU、TC、KIT、XMAS、VIP 等模式尚未实现。
-
-管理员命令
----
-以下命令通过 RCON 使用，不是玩家聊天指令：
-- `room_setting 0 asylum_items`：查看装备 ID。
-- `room_setting 0 asylum_status`：查看当前模式状态。
-- `room_setting 0 asylum_loadout <客户端ID> <近战ID> <远程ID> <特殊ID>`：给普通角色指定装备。固定身份和 GG 模式不能覆盖。
-
-在Ubuntu上使用CMake构建
----
-1.安装依赖库
+```text
+TeeAsylum-Server.exe -f autoexec.cfg
+./TeeAsylum-Server -f autoexec.cfg
 ```
-    sudo apt install build-essential cmake python3 libsqlite3-dev
+
+Windows 也可运行 `Start-TeeAsylum.cmd`。默认 `autoexec.cfg` 是大厅巡回；旧独立房间玩法使用 `-f autoexec-room-modes.cfg`。
+
+源码仓库的正式配置放在 `package/`，不覆盖开发者自己的根目录 `autoexec.cfg`。手动构建后应将可执行文件、`data/`、`room_config/`、`package/` 内的配置、许可证放到同一运行目录；Windows 另带 `sqlite3.dll`。
+
+E/R 通过客户端自行绑定：
+
+```text
+bind e "say /asylum_e"
+bind r "say /asylum_r"
 ```
-2.编译服务端
+
+音乐已经内嵌地图，无需另装播放器。Boss 的 `blacktee` 外观需将包内 `client-skins/blacktee.png` 手动复制到 DDNet 的 skins 目录；服务器不会推送皮肤图片。
+
+## 管理员
+
+```text
+room_setting 0 asylum_items
+room_setting 0 asylum_status
+room_setting 0 asylum_give <CID> <装备ID>
+room_setting 0 asylum_god <CID> <0或1>
+room_setting 0 asylum_inspect <CID>
+room_setting 0 asylum_map asylum_10hourburstman
 ```
-    mkdir build && cd build
-    cmake ..
-    make -j16
+
+这些不是普通聊天命令。`asylum_give` 自动选择对应类别槽位；`asylum_inspect` 只读输出生命、护甲、四槽物品、充能和装填状态；`asylum_map` 仅限 room 0 切换全服物理地图。
+
+## 构建
+
+Ubuntu：
+
+```bash
+sudo apt install build-essential cmake python3 libsqlite3-dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDEV=ON
+cmake --build build --target DDNet-Server --parallel 8
 ```
+
+Windows（Visual Studio 2022 x64）：
+
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DDEV=ON
+cmake --build build --config Release --target DDNet-Server --parallel 8
+```
+
+本轮只导入游戏源码与开服需要的地图、音乐、配置；不保留原包的 `runtime-config` 外层、`work` 测试目录或 BUILD 说明。本仓库保留现有 CI、产物名称与之前的编译兼容修复。新地图与可选皮肤的 0.7 客户端显示不当作已验收功能。

@@ -626,11 +626,10 @@ void CGameContext::SendTuningParams(int ClientID, int Zone)
 	}
 
 	CMsgPacker Msg(NETMSGTYPE_SV_TUNEPARAMS);
-	int *pParams = 0;
-	if(Zone == 0)
-		pParams = (int *)&m_Tuning;
-	else
-		pParams = (int *)&(m_aTuningList[Zone]);
+	CTuningParams ClientTuning = Zone == 0 ? m_Tuning : m_aTuningList[Zone];
+	if(m_apPlayers[ClientID] && m_apPlayers[ClientID]->GetCharacter())
+		m_apPlayers[ClientID]->GetCharacter()->ApplyWeaponMovementTuning(ClientTuning);
+	int *pParams = (int *)&ClientTuning;
 
 	unsigned int Last = sizeof(m_Tuning) / sizeof(int);
 	if(m_apPlayers[ClientID])

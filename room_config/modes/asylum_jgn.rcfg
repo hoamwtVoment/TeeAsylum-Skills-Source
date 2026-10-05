@@ -1,3 +1,5 @@
+# Juggernaut has scaled HP but zero armor; challengers have three lives.
+# America and Taser are excluded from challenger random loadouts.
 exec "room_config/asylum-common.rcfg"
 scorelimit 0
 timelimit 0

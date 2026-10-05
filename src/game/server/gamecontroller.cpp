@@ -1797,12 +1797,15 @@ void IGameController::Snap(int SnappingClient)
 			pGameInfoObj->m_RoundStartTick = m_GameStartTick - 2;
 		else
 			pGameInfoObj->m_RoundStartTick = m_GameStartTick;
+		pGameInfoObj->m_RoundStartTick -= MapMusicOffsetSeconds() * Server()->TickSpeed();
 		pGameInfoObj->m_WarmupTimer = WarmupTimer;
 
 		pGameInfoObj->m_RoundNum = 0;
 		pGameInfoObj->m_RoundCurrent = m_RoundCount + 1;
 		pGameInfoObj->m_ScoreLimit = m_GameInfo.m_ScoreLimit;
 		pGameInfoObj->m_TimeLimit = m_GameInfo.m_TimeLimit;
+		if(pGameInfoObj->m_TimeLimit > 0)
+			pGameInfoObj->m_TimeLimit += MapMusicOffsetSeconds() / 60;
 		pGameInfoObj->m_RoundCurrent = m_GameInfo.m_MatchCurrent;
 		pGameInfoObj->m_RoundNum = m_GameInfo.m_MatchNum;
 
@@ -1839,7 +1842,7 @@ void IGameController::Snap(int SnappingClient)
 		if(!pGameData)
 			return;
 
-		pGameData->m_GameStartTick = m_GameStartTick;
+		pGameData->m_GameStartTick = m_GameStartTick - MapMusicOffsetSeconds() * Server()->TickSpeed();
 		pGameData->m_GameStateFlags = GameStateFlags;
 		pGameData->m_GameStateEndTick = GameStateEndTick;
 

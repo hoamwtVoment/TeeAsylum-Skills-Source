@@ -72,6 +72,12 @@ public:
 
 	class CWeapon *CurrentWeapon();
 	void HandleWeapons();
+	void ApplyWeaponMovementTuning(CTuningParams &Tuning);
+	void ApplyKnockback(vec2 Force, bool LiftGrounded = false);
+	float m_LastWeaponGroundSpeedBonus;
+	int m_ShockUntil;
+	void Shock(float Seconds);
+	bool IsShocked();
 
 	void OnPredictedInput(CNetObj_PlayerInput *pNewInput);
 	void OnDirectInput(CNetObj_PlayerInput *pNewInput);
@@ -98,7 +104,7 @@ public:
 
 	void SetEmote(int Emote, int Tick);
 
-	int NeededFaketuning() { return m_NeededFaketuning; }
+	int NeededFaketuning() { return m_NeededFaketuning | (m_Core.m_AsylumPhase ? FAKETUNE_NOCOLL | FAKETUNE_NOHOOK : 0); }
 	bool IsAlive() const { return m_Alive; }
 	bool IsDisabled() const { return m_Disabled; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
@@ -257,11 +263,7 @@ public:
 	void SetLastAction(int LastAction) { m_LastAction = LastAction; };
 	int GetArmor() { return m_Armor; };
 	int GetHealth() const { return m_Health; }
-	vec2 GetAimDirection() const
-	{
-		const vec2 Direction(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY);
-		return length(Direction) > 0.0f ? normalize(Direction) : vec2(0, -1);
-	}
+	vec2 GetAimDirection();
 	void SetArmor(int Armor) { m_Armor = Armor; };
 	CCharacterCore GetCore() { return m_Core; };
 	void SetCore(CCharacterCore Core) { m_Core = Core; };

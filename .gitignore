@@ -36,6 +36,8 @@ pack_*/
 rules.ninja
 testrunner\[1\]_include.cmake
 autoexec.cfg
+!/package/autoexec.cfg
+!/package/autoexec-room-modes.cfg
 
 # Ignore all the generated executables without extensions (for non-Windows
 # systems).
@@ -90,6 +92,7 @@ tags
 /objs
 
 *.cmd
+!/package/Start-TeeAsylum.cmd
 *.dll
 *.dmg
 *.dtb

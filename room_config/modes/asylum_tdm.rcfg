@@ -1,3 +1,4 @@
+# Team score; inventory upgrades and regeneration retain friendly-fire rules.
 exec "room_config/asylum-common.rcfg"
 scorelimit 75
 timelimit 0

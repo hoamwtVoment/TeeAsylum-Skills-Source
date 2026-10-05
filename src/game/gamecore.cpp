@@ -88,6 +88,7 @@ void CCharacterCore::Reset()
 	m_Solo = false;
 	m_Jetpack = false;
 	m_NoCollision = false;
+	m_AsylumPhase = false;
 	m_EndlessHook = false;
 	m_EndlessJump = false;
 	m_NoHammerHit = false;
@@ -255,13 +256,13 @@ void CCharacterCore::Tick(bool UseInput)
 		}
 
 		// Check against other players first
-		if(this->m_Hook && m_pWorld && m_pWorld->m_Tuning.m_PlayerHooking)
+		if(this->m_Hook && !m_AsylumPhase && m_pWorld && m_pWorld->m_Tuning.m_PlayerHooking)
 		{
 			float Distance = 0.0f;
 			for(int i = 0; i < MAX_CLIENTS; i++)
 			{
 				CCharacterCore *pCharCore = m_pWorld->m_apCharacters[i];
-				if(!pCharCore || pCharCore == this || (!(m_Super || pCharCore->m_Super) && ((m_Id != -1 && !m_pTeams->CanCollide(i, m_Id)) || pCharCore->m_Solo || m_Solo)))
+				if(!pCharCore || pCharCore == this || pCharCore->m_AsylumPhase || (!(m_Super || pCharCore->m_Super) && ((m_Id != -1 && !m_pTeams->CanCollide(i, m_Id)) || pCharCore->m_Solo || m_Solo)))
 					continue;
 
 				vec2 ClosestPoint;
@@ -317,7 +318,7 @@ void CCharacterCore::Tick(bool UseInput)
 		if(m_HookedPlayer != -1)
 		{
 			CCharacterCore *pCharCore = m_pWorld->m_apCharacters[m_HookedPlayer];
-			if(pCharCore && m_Id != -1 && m_pTeams->CanKeepHook(m_Id, pCharCore->m_Id))
+			if(pCharCore && !m_AsylumPhase && !pCharCore->m_AsylumPhase && m_Id != -1 && m_pTeams->CanKeepHook(m_Id, pCharCore->m_Id))
 				m_HookPos = pCharCore->m_Pos;
 			else
 			{
@@ -388,7 +389,7 @@ void CCharacterCore::Tick(bool UseInput)
 			{
 				vec2 Dir = normalize(m_Pos - pCharCore->m_Pos);
 
-				bool CanCollide = (m_Super || pCharCore->m_Super) || (pCharCore->m_Collision && m_Collision && !m_NoCollision && !pCharCore->m_NoCollision && m_pWorld->m_Tuning.m_PlayerCollision);
+				bool CanCollide = !m_AsylumPhase && !pCharCore->m_AsylumPhase && ((m_Super || pCharCore->m_Super) || (pCharCore->m_Collision && m_Collision && !m_NoCollision && !pCharCore->m_NoCollision && m_pWorld->m_Tuning.m_PlayerCollision));
 
 				if(CanCollide && Distance < PhysSize * 1.25f && Distance > 0.0f)
 				{
@@ -405,7 +406,7 @@ void CCharacterCore::Tick(bool UseInput)
 				}
 
 				// handle hook influence
-				if(m_Hook && m_HookedPlayer == i && m_pWorld->m_Tuning.m_PlayerHooking)
+				if(m_Hook && !m_AsylumPhase && !pCharCore->m_AsylumPhase && m_HookedPlayer == i && m_pWorld->m_Tuning.m_PlayerHooking)
 				{
 					if(Distance > PhysSize * 1.50f) // TODO: fix tweakable variable
 					{
@@ -472,7 +473,7 @@ void CCharacterCore::Move()
 
 	m_Vel.x = m_Vel.x * (1.0f / RampValue);
 
-	if(m_pWorld && (m_Super || (m_pWorld->m_Tuning.m_PlayerCollision && m_Collision && !m_NoCollision && !m_Solo)))
+	if(m_pWorld && !m_AsylumPhase && (m_Super || (m_pWorld->m_Tuning.m_PlayerCollision && m_Collision && !m_NoCollision && !m_Solo)))
 	{
 		// check player collision
 		float Distance = distance(m_Pos, NewPos);
@@ -487,7 +488,7 @@ void CCharacterCore::Move()
 				for(int p = 0; p < MAX_CLIENTS; p++)
 				{
 					CCharacterCore *pCharCore = m_pWorld->m_apCharacters[p];
-					if(!pCharCore || pCharCore == this)
+					if(!pCharCore || pCharCore == this || pCharCore->m_AsylumPhase)
 						continue;
 					if((!(pCharCore->m_Super || m_Super) && (m_Solo || pCharCore->m_Solo || !pCharCore->m_Collision || pCharCore->m_NoCollision || (m_Id != -1 && !m_pTeams->CanCollide(m_Id, p)))))
 						continue;

@@ -1,0 +1,14 @@
+# Single-server physical map rotation. Room modes use autoexec-room-modes.cfg.
+warmup 0
+countdown 0
+minimum_players 1
+powerups 0
+scorelimit 0
+timelimit 0
+asylum_round_seconds 480
+asylum_lobby_seconds 45
+asylum_respawn_delay 2
+asylum_spawn_protection 1
+asylum_spawn_armor 0
+add_vote "查看规则与装备" "asylum_status"
+add_vote "重新开始当前地图" "restart"

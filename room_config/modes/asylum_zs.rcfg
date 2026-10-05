@@ -1,3 +1,4 @@
+# Survivors become 120-HP infected on death; only starting participants play.
 exec "room_config/asylum-common.rcfg"
 scorelimit 0
 timelimit 0

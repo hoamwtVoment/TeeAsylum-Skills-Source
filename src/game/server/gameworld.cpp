@@ -389,17 +389,19 @@ void CGameWorld::CreateExplosionParticle(vec2 Pos, int64 Mask)
 
 void CGameWorld::CreateExplosion(vec2 Pos, int Owner, int Weapon, int WeaponID, int MaxDamage, bool NoKnockback, int64 Mask)
 {
+	Controller()->ExplosionCombatNpc(Pos, Owner, WeaponID, MaxDamage);
 	// create the event
 	CreateExplosionParticle(Pos, Mask);
 
-	CCharacter *apEnts[MAX_CLIENTS];
+	CEntity *apEnts[MAX_CLIENTS] = {};
 	float Radius = 135.0f;
 	float InnerRadius = 48.0f;
-	int Num = FindEntities(Pos, Radius, (CEntity **)apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+	int Num = FindEntities(Pos, Radius, apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
 
 	for(int i = 0; i < Num; i++)
 	{
-		vec2 Diff = apEnts[i]->m_Pos - Pos;
+		CCharacter *pCharacter = static_cast<CCharacter *>(apEnts[i]);
+		vec2 Diff = pCharacter->m_Pos - Pos;
 		vec2 ForceDir(0, 1);
 		float l = length(Diff);
 		if(l)
@@ -418,9 +420,9 @@ void CGameWorld::CreateExplosion(vec2 Pos, int Owner, int Weapon, int WeaponID, 
 			continue;
 
 		if(NoKnockback)
-			apEnts[i]->TakeDamage({0.0f, 0.0f}, (int)Dmg, Owner, Weapon, WeaponID, true);
+			pCharacter->TakeDamage({0.0f, 0.0f}, (int)Dmg, Owner, Weapon, WeaponID, true);
 		else
-			apEnts[i]->TakeDamage(ForceDir * Knockback * 2, (int)Dmg, Owner, Weapon, WeaponID, true);
+			pCharacter->TakeDamage(ForceDir * Knockback * 2, (int)Dmg, Owner, Weapon, WeaponID, true);
 	}
 }
 
