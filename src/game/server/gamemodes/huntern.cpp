@@ -568,7 +568,7 @@ bool CGameControllerHunterN::ActivateTheWorld(int CID)
 		if(!AsylumPlayMapSound(GameWorld(), aSample, Origin, true, CmaskOne(Listener)))
 			GameWorld()->CreateSoundGlobal(SOUND_CTF_RETURN, CmaskOne(Listener));
 	}
-	SendChatTarget(-1, "ザ・ワールド！第1秒开始渐慢，音效播完后全图时停5秒（仅使用者可动）。");
+	SendChatTarget(-1, "ザ・ワールド！");
 	return true;
 }
 
