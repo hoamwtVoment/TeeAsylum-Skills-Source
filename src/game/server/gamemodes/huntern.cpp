@@ -54,7 +54,7 @@ CGameControllerHunterN::CGameControllerHunterN(int Mode) : IGameController(),
 	INSTANCE_CONFIG_INT(&m_SpawnArmor, "asylum_spawn_armor", 20, 0, 100, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Armor granted on each spawn");
 	INSTANCE_CONFIG_INT(&m_StartingLives, "asylum_lives", 3, 1, 10, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Lives in ELIM and for JGN challengers");
 	INSTANCE_CONFIG_INT(&m_RoundSeconds, "asylum_round_seconds", gs_aModeSeconds[m_Mode], 10, 3600, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Round duration in seconds");
-	INSTANCE_CONFIG_INT(&m_GodChance, "asylum_god_chance", 5, 0, 100, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Chance in percent per slot to roll a god-tier (★) item");
+	INSTANCE_CONFIG_INT(&m_GodChance, "asylum_god_chance", 0, 0, 100, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Chance in percent per slot to roll a god-tier (★) item; 0 disables random god-tier items (default)");
 	INSTANCE_CONFIG_INT(&m_GodOnly, "asylum_god_only", 0, 0, 1, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Roll only god-tier (★) items");
 	InstanceConsole()->Register("asylum_status", "", CFGFLAG_CHAT | CFGFLAG_INSTANCE | CFGFLAG_NO_CONSENT, ConStatus, this, "Show mode, timer, lives and equipment");
 	InstanceConsole()->Register("asylum_items", "", CFGFLAG_CHAT | CFGFLAG_INSTANCE | CFGFLAG_NO_CONSENT, ConItems, this, "List all random items");
