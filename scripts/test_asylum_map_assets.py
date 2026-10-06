@@ -40,17 +40,26 @@ class PackedMapTests(unittest.TestCase):
                 data = DataFile(path)
                 names = {data.get(values(item[2])[2]).rstrip(b"\0").decode() for item in data.typed(SOUND)}
                 self.assertFalse(names & REMOVED_SYNTH_SAMPLES)
-                self.assertEqual(names, {source.stem for source in SOUNDS})
+                skill_names = {source.stem for source in SOUNDS}
+                self.assertTrue(skill_names.issubset(names))
+                # Tour maps additionally retain their original embedded BGM.
+                extras = names - skill_names
+                self.assertTrue(extras.issubset({"asylum_lobby_propaganda", "asylum_10hourburstman", "asylum_10hourburstman_phase2", "BGM1", "BGM2"}), extras)
                 self.assertIn("vine_boom", names)
                 # Deleting only the sound table would leave hidden old Opus blobs.
                 count = sum(b"OpusHead" in data.get(index) for index in range(len(data.blocks)))
-                self.assertEqual(count, len(SOUNDS))
+                self.assertEqual(count, len(names))
 
     def test_no_autoplay_sound_sources_added(self):
         for path in MAPS:
             with self.subTest(map=path):
                 data = DataFile(path)
-                self.assertFalse(any(values(item[2])[1] == 10 for item in data.typed(LAYER)))
+                sound_names = {item[1]: data.get(values(item[2])[2]).rstrip(b"\0").decode()
+                               for item in data.typed(SOUND)}
+                for layer in data.typed(LAYER):
+                    payload = values(layer[2])
+                    if payload[1] == 10:
+                        self.assertIn(sound_names[payload[6]], {"asylum_lobby_propaganda", "asylum_10hourburstman", "asylum_10hourburstman_phase2"})
 
     def test_the_world_variants_finish_before_the_full_stop(self):
         clips = sorted((ROOT / "assets/asylum/sounds").glob("the_world_*.opus"))

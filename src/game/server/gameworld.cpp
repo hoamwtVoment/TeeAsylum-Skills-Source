@@ -26,6 +26,7 @@ CGameWorld::CGameWorld(int Team, CGameContext *pGameServer, IGameController *pCo
 	m_Paused = false;
 	m_ResetRequested = false;
 	m_AdvanceTimeStoppedEntities = true;
+	m_TimeStopAdvanceTick = -1;
 	for(auto &pFirstEntityType : m_apFirstEntityTypes)
 		pFirstEntityType = 0;
 }
@@ -54,6 +55,16 @@ bool CGameWorld::IsTimeStopped() const
 bool CGameWorld::IsTimeStopActive() const
 {
 	return m_TimeStop.Active(m_pServer->Tick());
+}
+
+bool CGameWorld::AdvanceTimeStoppedEntities()
+{
+	if(m_TimeStopAdvanceTick != Server()->Tick())
+	{
+		m_TimeStopAdvanceTick = Server()->Tick();
+		m_AdvanceTimeStoppedEntities = !m_Paused && m_TimeStop.AdvanceOthers(Server()->Tick());
+	}
+	return m_AdvanceTimeStoppedEntities;
 }
 
 bool CGameWorld::IsClientTimeStopped(int CID) const
@@ -253,7 +264,7 @@ void CGameWorld::Tick()
 
 	// One fractional virtual clock for all stopped entities: broad smoothstep
 	// slowdown, then zero Tick/physics advances. Never scale stored velocities.
-	m_AdvanceTimeStoppedEntities = !m_Paused && m_TimeStop.AdvanceOthers(Server()->Tick());
+	AdvanceTimeStoppedEntities();
 	if(!m_Paused)
 	{
 		// update all objects
@@ -459,20 +470,19 @@ void CGameWorld::CreateExplosionParticle(vec2 Pos, int64 Mask)
 
 void CGameWorld::CreateExplosion(vec2 Pos, int Owner, int Weapon, int WeaponID, int MaxDamage, bool NoKnockback, int64 Mask)
 {
+	Controller()->ExplosionCombatNpc(Pos, Owner, WeaponID, MaxDamage);
 	// create the event
 	CreateExplosionParticle(Pos, Mask);
 
-	// FindEntities writes CEntity pointers. Do not alias a CCharacter** array:
-	// GCC's strict-aliasing optimizer may otherwise miss those writes.
-	CEntity *apEnts[MAX_CLIENTS];
+	CEntity *apEnts[MAX_CLIENTS] = {};
 	float Radius = 135.0f;
 	float InnerRadius = 48.0f;
 	int Num = FindEntities(Pos, Radius, apEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
 
 	for(int i = 0; i < Num; i++)
 	{
-		CCharacter *pChr = static_cast<CCharacter *>(apEnts[i]);
-		vec2 Diff = pChr->m_Pos - Pos;
+		CCharacter *pCharacter = static_cast<CCharacter *>(apEnts[i]);
+		vec2 Diff = pCharacter->m_Pos - Pos;
 		vec2 ForceDir(0, 1);
 		float l = length(Diff);
 		if(l)
@@ -491,9 +501,9 @@ void CGameWorld::CreateExplosion(vec2 Pos, int Owner, int Weapon, int WeaponID, 
 			continue;
 
 		if(NoKnockback)
-			pChr->TakeDamage({0.0f, 0.0f}, (int)Dmg, Owner, Weapon, WeaponID, true);
+			pCharacter->TakeDamage({0.0f, 0.0f}, (int)Dmg, Owner, Weapon, WeaponID, true);
 		else
-			pChr->TakeDamage(ForceDir * Knockback * 2, (int)Dmg, Owner, Weapon, WeaponID, true);
+			pCharacter->TakeDamage(ForceDir * Knockback * 2, (int)Dmg, Owner, Weapon, WeaponID, true);
 	}
 }
 

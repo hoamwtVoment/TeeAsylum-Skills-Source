@@ -32,4 +32,5 @@ REGISTER_GAME_TYPE(asylum_gg, CGameControllerAsylumGG)
 REGISTER_GAME_TYPE(asylum_elim, CGameControllerAsylumELIM)
 REGISTER_GAME_TYPE(asylum_zs, CGameControllerAsylumZS)
 REGISTER_GAME_TYPE(asylum_jgn, CGameControllerAsylumJGN)
+REGISTER_GAME_TYPE(asylum_tour, CGameControllerAsylumTour)
 #endif

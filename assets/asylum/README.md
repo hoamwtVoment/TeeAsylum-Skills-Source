@@ -14,13 +14,13 @@
 
 ## 装备与测试
 
-本分支共 44 件装备：32 件普通装备、12 件大神装备。
+本分支共 58 项：36 件普通随机装备、5 个升级模块、5 件升级武器、12 件大神装备。大神随机概率默认 0%，only 默认关闭；保留 main 的 ID 0–45，大神装备使用 46–57，旧大神 ID 32–43 已顺延。
 
-### 动感星期五（ID 41，远程）
+### 动感星期五（ID 55，远程）
 
 0.2 秒一次，向准星发射箭头，箭头图形按左、下、上、右循环。单箭头 18 伤、4 击退、最长飞行 1 秒；碰墙、命中或发射者死亡/换房时消失。每次实际开火随机播放一段对应方向的 BF 音节。麦克风用激光线条描边，普通客户端仍保留基础武器贴图。
 
-### 恋符MasterSpark（ID 42，远程）
+### 恋符MasterSpark（ID 56，远程）
 
 参考 [THBWiki 的 Master Spark](https://thwiki.cc/Master_Spark) 中蓄力后发射极粗激光的描述，做二维适配，而非完整复刻原作。
 
@@ -31,7 +31,7 @@
 - 12 秒冷却；切武器、死亡、冻结、离开房间或回合结束会中断，不获得无敌。
 - 只使用游戏原有激光音效，不新增合成音效。
 
-### The World（ザ・ワールド）（ID 43，特殊）
+### The World（ザ・ワールド）（ID 57，特殊）
 
 - 触发立即播放完整原声；前 **1 秒**正常运行。从音频第 1 秒开始，除使用者外的所有实体用平滑曲线逐渐降低 Tick 推进频率。
 - 原录音约 **4.412 秒**，编码后容器时长约 **4.418 秒**。在 50Hz 服务端第 **4.42 秒**才完全暂停，保证录音完整播放；完全停止持续 **5 秒**。
@@ -47,9 +47,9 @@
 在 Asylum 房间内通过 RCON 指定装备：
 
 ```text
-asylum_test_loadout <CID> 32 42 39
+asylum_test_loadout <CID> 46 56 53
 # 同时测试恋符MasterSpark和The World
-asylum_test_loadout <CID> 32 42 43
+asylum_test_loadout <CID> 46 56 57
 ```
 
 ## 地图资源与跳脸
@@ -77,10 +77,10 @@ asylum_test_reset_cd 0
 asylum_test_god 0 1
 asylum_test_god 0 0
 # 快速换一件：自动确定槽位，其他两件不变；同时切到新装备
-asylum_test_weapon 0 42
-asylum_test_weapon 0 43
+asylum_test_weapon 0 56
+asylum_test_weapon 0 57
 # 三槽配装与查看装备 ID
-asylum_test_loadout 0 32 42 43
+asylum_test_loadout 0 46 56 57
 asylum_test_items
 ```
 
@@ -96,7 +96,7 @@ asylum_test_items
 
 ## 重新转换与打包
 
-当前地图内有 **35** 个录音样本（22 个 BF、1 个 Vine Boom、12 个 The World 音量版本）。需要 Python 3 和 ffmpeg 重新转换；普通构建与 CI 使用已打包的地图，不需要 ffmpeg：
+当前地图内有 **35** 个技能录音样本（22 个 BF、1 个 Vine Boom、12 个 The World 音量版本），巡回大厅/Boss 地图另保留其背景音乐。需要 Python 3 和 ffmpeg 重新转换；普通构建与 CI 使用已打包的地图，不需要 ffmpeg：
 
 ```powershell
 python scripts/asylum_sound_assets.py

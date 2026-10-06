@@ -54,6 +54,7 @@ private:
 	class IServer *m_pServer;
 	CAsylumTimeStop m_TimeStop;
 	bool m_AdvanceTimeStoppedEntities;
+	int m_TimeStopAdvanceTick;
 
 public:
 	class CGameContext *GameServer() { return m_pGameServer; }
@@ -65,6 +66,8 @@ public:
 	bool IsClientTimeStopped(int CID) const;
 	bool IsClientFullyTimeStopped(int CID) const;
 	bool IsEntityTimeStopped(CEntity *pEntity) const;
+	// Controller-owned Boss AI and entities share one virtual-clock decision.
+	bool AdvanceTimeStoppedEntities();
 	bool StartTimeStop(int Owner, int DurationTicks);
 	void EndTimeStop();
 	int TimeStopVisualMillis() const;

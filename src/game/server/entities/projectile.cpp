@@ -4,6 +4,7 @@
 #include <game/generated/protocol.h>
 #include <game/server/gamecontext.h>
 #include <game/server/player.h>
+#include <game/server/weapons.h>
 #include <game/version.h>
 
 #include <engine/shared/config.h>
@@ -29,6 +30,10 @@ CProjectile::CProjectile(
 	m_Type = WeaponType;
 	m_Pos = Pos;
 	m_StartPos = Pos; // Hunter
+	m_CustomSpeed = 0.0f;
+	m_IgnoreWalls = false;
+	m_FloorSlide = false;
+	m_SlideVelocity = vec2(0, 0);
 	m_Direction = Dir;
 	m_LifeSpan = Span;
 	m_Owner = Owner;
@@ -74,6 +79,12 @@ void CProjectile::Reset()
 
 void CProjectile::GetProjectileProperties(float *pCurvature, float *pSpeed)
 {
+	if(m_CustomSpeed > 0.0f)
+	{
+		*pCurvature = 0.0f;
+		*pSpeed = m_CustomSpeed;
+		return;
+	}
 	switch(m_Type)
 	{
 	case WEAPON_GRENADE:
@@ -121,6 +132,8 @@ void CProjectile::GetProjectileProperties(float *pCurvature, float *pSpeed)
 
 vec2 CProjectile::GetPos(float Time)
 {
+	if(m_FloorSlide)
+		return m_Pos;
 	float Curvature = 0;
 	float Speed = 0;
 	GetProjectileProperties(&Curvature, &Speed);
@@ -132,10 +145,37 @@ void CProjectile::Tick()
 	float Pt = (Server()->Tick() - m_StartTick - 1) / (float)Server()->TickSpeed();
 	float Ct = (Server()->Tick() - m_StartTick) / (float)Server()->TickSpeed();
 	vec2 PrevPos = GetPos(Pt);
-	m_Pos = GetPos(Ct); // Hunter
+	if(m_FloorSlide)
+	{
+		if(m_SlideVelocity.y >= 0 && GameServer()->Collision()->CheckPoint(m_Pos + vec2(0, 2)))
+		{
+			m_SlideVelocity.y = 0;
+			m_SlideVelocity.x *= 0.995f;
+		}
+		else
+			m_SlideVelocity.y += 0.5f;
+		m_Pos += m_SlideVelocity;
+	}
+	else
+		m_Pos = GetPos(Ct); // Hunter
 	vec2 ColPos;
 	vec2 NewPos;
-	int Collide = GameServer()->Collision()->IntersectLine(PrevPos, m_Pos, &ColPos, &NewPos);
+	int Collide = 0;
+	if(m_IgnoreWalls)
+		ColPos = NewPos = m_Pos;
+	else
+		Collide = GameServer()->Collision()->IntersectLine(PrevPos, m_Pos, &ColPos, &NewPos);
+	if(m_FloorSlide && Collide && m_SlideVelocity.y > 0 &&
+		GameServer()->Collision()->CheckPoint(vec2(NewPos.x, ColPos.y + 2)) &&
+		!GameServer()->Collision()->CheckPoint(vec2(ColPos.x + (m_SlideVelocity.x >= 0 ? 2 : -2), NewPos.y - 2)))
+	{
+		// Floor only: ceilings and walls still use the normal impact callback.
+		m_Pos = NewPos - vec2(0, 0.5f);
+		ColPos = m_Pos;
+		m_SlideVelocity.y = 0;
+		m_SlideVelocity.x *= 0.995f;
+		Collide = 0;
+	}
 	CCharacter *pOwnerChar = nullptr;
 	CPlayer *pOwnerPlayer = nullptr;
 
@@ -183,6 +223,20 @@ void CProjectile::Tick()
 
 	if(m_Callback)
 	{
+		vec2 NpcPos;
+		if(!m_NpcHit && GameWorld()->Controller()->IntersectCombatNpc(PrevPos, ColPos, m_Radius, &NpcPos))
+		{
+			const int Applied = GameWorld()->Controller()->DamageCombatNpc(m_Owner, m_WeaponID,
+				m_CombatDamageOverride >= 0 ? m_CombatDamageOverride : GameWorld()->Controller()->CombatNpcWeaponDamage(m_Owner, m_WeaponID));
+			m_NpcHit = Applied > 0;
+			// Lilynette is piercing; the same bolt still hits this NPC only once.
+			// The floor-sliding shovel only disappears after actual damage.
+			if(m_WeaponID != WEAPON_ID_ASYLUM_LILYNETTE && (!m_FloorSlide || Applied > 0))
+			{
+				m_MarkedForDestroy = true;
+				return;
+			}
+		}
 		bool IsProtectingOwner = false;
 		for(auto pChar : pTargetChars)
 		{
@@ -272,6 +326,17 @@ void CProjectile::TickPaused()
 
 void CProjectile::FillInfo(CNetObj_Projectile *pProj)
 {
+	if(m_CustomSpeed > 0 && !m_FloorSlide)
+	{
+		// Stock clients cannot encode custom speed/curvature. Rebase only the
+		// wire sprite every snap; keep the original authoritative trajectory.
+		float NativeSpeed = m_Type == WEAPON_SHOTGUN ? GameServer()->Tuning()->m_ShotgunSpeed : GameServer()->Tuning()->m_GunSpeed;
+		pProj->m_X = round_to_int(m_Pos.x); pProj->m_Y = round_to_int(m_Pos.y);
+		pProj->m_VelX = round_to_int(m_Direction.x * 100 * m_CustomSpeed / maximum(1.0f, NativeSpeed));
+		pProj->m_VelY = round_to_int(m_Direction.y * 100 * m_CustomSpeed / maximum(1.0f, NativeSpeed));
+		pProj->m_StartTick = Server()->Tick(); pProj->m_Type = m_Type;
+		return;
+	}
 	pProj->m_X = (int)m_StartPos.x; // Hunter
 	pProj->m_Y = (int)m_StartPos.y; // Hunter
 	pProj->m_VelX = (int)(m_Direction.x * 100.0f);
@@ -346,6 +411,7 @@ void CProjectile::SetBouncing(int Value)
 
 bool CProjectile::FillExtraInfo(CNetObj_DDNetProjectile *pProj)
 {
+	if(m_CustomSpeed > 0) return false; // Extended angles cannot carry speed.
 	const int MaxPos = 0x7fffffff / 100;
 	if(abs((int)m_StartPos.y) + 1 >= MaxPos || abs((int)m_StartPos.x) + 1 >= MaxPos) // Hunter
 	{

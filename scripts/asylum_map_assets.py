@@ -48,7 +48,9 @@ def name_ints(name, count):
 
 def decode_name(numbers):
     raw = b"".join((number & 0xffffffff).to_bytes(4, "big") for number in numbers)
-    return bytes((byte - 128) & 255 for byte in raw[:-1]).split(b"\0", 1)[0].decode()
+    # Old maps may contain unnamed/version-1 envelopes with zero-filled names.
+    # Preserve their bytes; they are not names owned by this embedding script.
+    return bytes((byte - 128) & 255 for byte in raw[:-1]).split(b"\0", 1)[0].decode(errors="replace")
 
 
 class DataFile:

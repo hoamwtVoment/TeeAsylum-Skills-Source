@@ -94,6 +94,19 @@ void CMasterSpark::DamageBeam(CCharacter *pOwner)
 	const int Num = GameWorld()->FindEntities(m_Pos + m_Direction * (SPARK_RANGE / 2.0f),
 		SPARK_RANGE / 2.0f + SPARK_END_RADIUS, apEntities, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
 	const vec2 Side(-m_Direction.y, m_Direction.x);
+	// The Boss is a controller-owned combat NPC, not an ENTTYPE_CHARACTER.
+	// Trace the same expanding beam lanes; terrain still blocks each lane.
+	for(int Lane = -3; Lane <= 3; ++Lane)
+	{
+		const float Offset = Lane / 3.0f;
+		const vec2 From = m_Pos + Side * (Offset * SPARK_MOUTH_RADIUS);
+		const vec2 To = m_Pos + m_Direction * SPARK_RANGE + Side * (Offset * SPARK_END_RADIUS);
+		if(!GameServer()->Collision()->CheckPoint(From) && Controller()->IntersectCombatNpc(From, To, 0, nullptr))
+		{
+			Controller()->DamageCombatNpc(m_Owner, m_WeaponID, m_Damage);
+			break;
+		}
+	}
 	for(int i = 0; i < Num; ++i)
 	{
 		CCharacter *pTarget = static_cast<CCharacter *>(apEntities[i]);

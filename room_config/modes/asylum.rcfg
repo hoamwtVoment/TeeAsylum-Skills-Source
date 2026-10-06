@@ -1,4 +1,5 @@
-# 7 melee x 9 ranged x 8 utility = 504 possible FFA loadouts
+# 7 melee x 21 ranged x 8 utility = 1176 possible FFA loadouts
+# Two kill-earned modules and two upgraded weapons are outside random pools.
 exec "room_config/asylum-common.rcfg"
 scorelimit 25
 timelimit 0

@@ -44,6 +44,12 @@ private:
 	FProjectileImpactCallback m_Callback;
 	int m_ID;
 	vec2 m_StartPos; // Hunter
+	float m_CustomSpeed;
+	bool m_IgnoreWalls;
+	bool m_FloorSlide;
+	vec2 m_SlideVelocity;
+	bool m_NpcHit = false;
+	int m_CombatDamageOverride = -1;
 
 	// DDRace
 	int m_TuneZone; //TODO: make curvature and property
@@ -67,6 +73,12 @@ public:
 	int GetOwner() { return m_Owner; }
 	int GetWeaponID() { return m_WeaponID; }
 	vec2 GetStartPos() const { return m_StartPos; }
+	void SetCombatDamageOverride(int Damage) { m_CombatDamageOverride = Damage; }
+	int CombatDamageOverride() const { return m_CombatDamageOverride; }
+	// Optional server-only linear trajectory. Defaults preserve all existing weapons.
+	void SetCustomTrajectory(float Speed, bool IgnoreWalls) { m_CustomSpeed = Speed; m_IgnoreWalls = IgnoreWalls; }
+	// Opt-in physical projectile: floor contact preserves horizontal momentum.
+	void SetFloorSliding(vec2 Velocity) { m_FloorSlide = true; m_SlideVelocity = Velocity; }
 	/* Hunter Start */
 	void SetOwner(int Owner) { m_Owner = Owner; }
 	void SetStartTick(int Tick) { m_StartTick = Tick; }

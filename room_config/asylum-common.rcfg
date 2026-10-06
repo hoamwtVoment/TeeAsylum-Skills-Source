@@ -5,11 +5,12 @@ minimum_players 2
 tournament_chat 0
 asylum_respawn_delay 2
 asylum_spawn_protection 1
-asylum_spawn_armor 2
+# No spawn armor; the one-second protection above is a separate short shield.
+asylum_spawn_armor 0
 add_vote "=== TEE ASYLUM+ ===" "info"
 add_vote "重新开始本局" "restart"
 add_vote "查看本模式规则" "asylum_status"
-add_vote "查看24件装备列表" "asylum_items"
+add_vote "查看36项装备与升级列表" "asylum_items"
 add_vote "模式 FFA 自由混战" "gametype asylum"
 add_vote "模式 TDM 团队死斗" "gametype asylum_tdm"
 add_vote "模式 GG 武器升级" "gametype asylum_gg"

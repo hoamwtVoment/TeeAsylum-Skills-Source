@@ -28,6 +28,8 @@ CCharacter::CCharacter(CGameWorld *pWorld) :
 	m_MaxArmor = 10; // Hunter
 	m_WeaponTimerType = WEAPON_TIMER_GLOBAL;
 	m_FreezeWeaponSwitch = false;
+	m_LastWeaponGroundSpeedBonus = 0.0f;
+	m_ShockUntil = 0;
 	m_ProtectTick = 0;
 	m_ProtectStartTick = 0;
 
@@ -65,6 +67,8 @@ void CCharacter::Reset()
 
 bool CCharacter::Spawn(CPlayer *pPlayer, vec2 Pos)
 {
+	m_ShockUntil = 0;
+	m_LastWeaponGroundSpeedBonus = 0.0f;
 	m_EmoteStop = -1;
 	m_LastAction = -1;
 	m_LastWeaponSlot = WEAPON_HAMMER;
@@ -297,7 +301,7 @@ void CCharacter::FireWeapon()
 	if((pCurrentWeapon->IsFullAuto() || m_FrozenLastTick) && m_IsFiring)
 		WillFire = true;
 
-	if(!WillFire || IsFrozen())
+	if(!WillFire || (IsFrozen() && !pCurrentWeapon->CanUseWhileFrozen()))
 		return;
 
 	pCurrentWeapon->HandleFire(Direction);
@@ -439,6 +443,62 @@ void CCharacter::ResetInput()
 	m_LatestPrevInput = m_LatestInput = m_Input;
 }
 
+vec2 CCharacter::GetAimDirection()
+{
+	vec2 Direction(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY);
+	CWeapon *pHeld = CurrentWeapon();
+	if(pHeld && pHeld->OverrideAim(Direction))
+		return Direction;
+	return length(Direction) > 0.0f ? normalize(Direction) : vec2(0, -1);
+}
+
+void CCharacter::ApplyWeaponMovementTuning(CTuningParams &Tuning)
+{
+	float BonusTiles = 0.0f;
+	for(int Slot = 0; Slot < NUM_WEAPON_SLOTS; ++Slot)
+		if(m_apWeaponSlots[Slot])
+			BonusTiles += m_apWeaponSlots[Slot]->WalkspeedBonusTiles();
+	float Speed = Controller()->BaseWalkspeedTiles();
+	CWeapon *pHeld = CurrentWeapon();
+	if(pHeld && pHeld->BlocksHook())
+	{
+		Tuning.m_HookLength = 0.0f;
+		Tuning.m_HookDragAccel = 0.0f;
+		Tuning.m_HookDragSpeed = 0.0f;
+	}
+	if(pHeld && pHeld->FixedWalkspeedTiles() >= 0.0f)
+	{
+		Speed = pHeld->FixedWalkspeedTiles();
+		BonusTiles = 0.0f; // An absolute skill speed overrides additive buffs.
+	}
+	// Tuning values are world units per tick.  One DDNet tile is 32 world
+	// units, so a 16-tile/s contract is 16*32/50 = 10.24 units/tick.
+	const float Bonus = BonusTiles * 32.0f / Server()->TickSpeed();
+	if(Speed >= 0.0f)
+	{
+		const float Target = maximum(0.0f, Speed * 32.0f / Server()->TickSpeed() + Bonus);
+		// CTuneParam's float assignment truncates; protect exact targets
+		// such as 12.80 against binary floating point becoming 12.79.
+		Tuning.m_GroundControlSpeed.Set(round_to_int(Target * 100.0f));
+		Tuning.m_AirControlSpeed.Set(round_to_int(Target * 100.0f));
+	}
+	else
+	{
+		Tuning.m_GroundControlSpeed = maximum(0.0f, (float)Tuning.m_GroundControlSpeed + Bonus);
+		Tuning.m_AirControlSpeed = maximum(0.0f, (float)Tuning.m_AirControlSpeed + Bonus);
+	}
+}
+
+void CCharacter::ApplyKnockback(vec2 Force, bool LiftGrounded)
+{
+	vec2 Velocity = m_Core.m_Vel + Force;
+	// A small upward impulse clears floor friction; walls and ceilings still
+	// use the normal collision solver. Preserve intentional downward slams.
+	if(LiftGrounded && absolute(Force.x) >= 4.0f && Force.y <= 0.0f && IsGrounded())
+		Velocity.y = minimum(Velocity.y, -6.0f);
+	m_Core.m_Vel = ClampVel(m_MoveRestrictions, Velocity);
+}
+
 void CCharacter::Tick()
 {
 	if(m_Disabled)
@@ -456,7 +516,30 @@ void CCharacter::Tick()
 	Antibot()->OnCharacterTick(m_pPlayer->GetCID());
 
 	m_Core.m_Input = m_Input;
+	CWeapon *pMovementWeapon = CurrentWeapon();
+	if(pMovementWeapon && pMovementWeapon->BlocksHook())
+	{
+		m_Core.m_Input.m_Hook = 0;
+		ResetHook();
+		m_Core.ResetDragVelocity();
+	}
+	vec2 LockedAim;
+	if(pMovementWeapon && pMovementWeapon->OverrideAim(LockedAim))
+	{
+		m_Core.m_Input.m_TargetX = round_to_int(LockedAim.x * 100);
+		m_Core.m_Input.m_TargetY = round_to_int(LockedAim.y * 100);
+	}
+	const CTuningParams BaseMovementTuning = m_Core.m_pWorld->m_Tuning;
+	ApplyWeaponMovementTuning(m_Core.m_pWorld->m_Tuning);
+	const float WeaponSpeedBonus = m_Core.m_pWorld->m_Tuning.m_GroundControlSpeed;
+	if(WeaponSpeedBonus != m_LastWeaponGroundSpeedBonus)
+	{
+		m_LastWeaponGroundSpeedBonus = WeaponSpeedBonus;
+		GameServer()->SendTuningParams(m_pPlayer->GetCID(), m_TuneZone);
+	}
 	m_Core.Tick(true);
+	// Per-character stats must never leak into another player's core tick.
+	m_Core.m_pWorld->m_Tuning = BaseMovementTuning;
 
 	if(!m_PrevInput.m_Hook && m_Input.m_Hook && !(m_Core.m_TriggeredEvents & COREEVENT_HOOK_ATTACH_PLAYER))
 	{
@@ -505,6 +588,14 @@ void CCharacter::TickDefered()
 	if(pCurrentWeapon && !pCurrentWeapon->IgnoreHookDrag())
 		m_Core.AddDragVelocity();
 	m_Core.ResetDragVelocity();
+
+	// Absolute skill speeds also cap carried momentum, collision pushes and
+	// forces applied after the core tick, before authoritative movement.
+	if(pCurrentWeapon && pCurrentWeapon->FixedWalkspeedTiles() >= 0.0f)
+	{
+		const float Limit = pCurrentWeapon->FixedWalkspeedTiles() * 32.0f / Server()->TickSpeed();
+		m_Core.m_Vel.x = clamp(m_Core.m_Vel.x, -Limit, Limit);
+	}
 
 	//lastsentcore
 	vec2 StartPos = m_Core.m_Pos;
@@ -597,6 +688,7 @@ void CCharacter::TickPaused()
 {
 	if(GameWorld()->IsTimeStopped())
 		m_Core.ResetDragVelocity();
+	if(m_ShockUntil > 0) ++m_ShockUntil;
 	++m_DamageTakenTick;
 	++m_ReckoningTick;
 	if(m_LastAction != -1)
@@ -613,6 +705,17 @@ void CCharacter::TickPaused()
 	}
 	if(m_pPowerupWeapon)
 		m_pPowerupWeapon->TickPaused();
+}
+
+void CCharacter::Shock(float Seconds)
+{
+	m_ShockUntil = maximum(m_ShockUntil, Server()->Tick() + round_to_int(Seconds * Server()->TickSpeed()));
+	Freeze(Seconds, true);
+}
+
+bool CCharacter::IsShocked()
+{
+	return m_ShockUntil > Server()->Tick();
 }
 
 bool CCharacter::IncreaseHealth(int Amount)
@@ -636,6 +739,8 @@ void CCharacter::Die(int Killer, int Weapon)
 	// Keep explicit K/admin/room cleanup working even in testing god mode.
 	if(m_pPlayer->m_AsylumTestGod && Weapon != WEAPON_SELF && Weapon != WEAPON_GAME)
 		return;
+	if(Weapon == WEAPON_WORLD && Controller()->IsAdminInvincible(m_pPlayer->GetCID()))
+		return; // Explicit suicide and administrator removals are still allowed.
 	if(Server()->IsRecording(m_pPlayer->GetCID()))
 		Server()->StopRecord(m_pPlayer->GetCID());
 
@@ -662,9 +767,10 @@ void CCharacter::Die(int Killer, int Weapon)
 	{
 		/* Hunter Start */
 		CNetMsg_Sv_KillMsg Msg;
-		Msg.m_Killer = Killer;
+		// Combat NPC damage uses an internal sentinel, never a wire client ID.
+		Msg.m_Killer = Killer == -2 ? m_pPlayer->GetCID() : Killer;
 		Msg.m_Victim = m_pPlayer->GetCID();
-		Msg.m_Weapon = Weapon;
+		Msg.m_Weapon = Killer == -2 ? WEAPON_WORLD : Weapon;
 		Msg.m_ModeSpecial = ModeSpecial;
 
 		if(DeathFlag & DEATH_NO_REASON)
@@ -692,7 +798,7 @@ void CCharacter::Die(int Killer, int Weapon)
 
 	char aBuf[256];
 	str_format(aBuf, sizeof(aBuf), "kill killer='%d:%s' victim='%d:%s' weapon=%d special=%d",
-		Killer, Server()->ClientName(Killer),
+		Killer, Killer == -2 ? "combat NPC" : Server()->ClientName(Killer),
 		m_pPlayer->GetCID(), Server()->ClientName(m_pPlayer->GetCID()), Weapon, ModeSpecial);
 	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
 }
@@ -724,8 +830,7 @@ bool CCharacter::TakeDamage(vec2 Force, int Dmg, int From, int Weapon, int Weapo
 
 	if(!(DamageFlag & DAMAGE_NO_KNOCKBACK))
 	{
-		vec2 Temp = m_Core.m_Vel + Force;
-		m_Core.m_Vel = ClampVel(m_MoveRestrictions, Temp);
+		ApplyKnockback(Force, Controller()->BaseWalkspeedTiles() >= 0.0f);
 	}
 
 	if(Dmg == 0)
@@ -851,7 +956,8 @@ void CCharacter::SnapCharacter(int SnappingClient, int MappedID)
 
 	CWeapon *pCurrentWeapon = CurrentWeapon();
 
-	int Tick, Emote = m_EmoteType, Weapon = pCurrentWeapon ? pCurrentWeapon->GetType() : m_ActiveWeaponSlot, AmmoCount = 0,
+	// A lobby has no usable weapon, but the vanilla snapshot enum must be legal.
+	int Tick, Emote = m_EmoteType, Weapon = pCurrentWeapon ? pCurrentWeapon->GetType() : WEAPON_HAMMER, AmmoCount = 0,
 		  Health = 0, Armor = 0, AttackTick = pCurrentWeapon ? pCurrentWeapon->GetAttackTick() : 0;
 
 	const bool TimeStopped = GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID());
@@ -1079,9 +1185,9 @@ void CCharacter::Snap(int SnappingClient, int OtherMode)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_SUPER;
 	if(m_EndlessHook)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_ENDLESS_HOOK;
-	if(!m_Core.m_Collision || !GameServer()->Tuning()->m_PlayerCollision)
+	if(!m_Core.m_Collision || m_Core.m_AsylumPhase || !GameServer()->Tuning()->m_PlayerCollision)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_NO_COLLISION;
-	if(!m_Core.m_Hook || !GameServer()->Tuning()->m_PlayerHooking)
+	if(!m_Core.m_Hook || m_Core.m_AsylumPhase || !GameServer()->Tuning()->m_PlayerHooking)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_NO_HOOK;
 	if(m_SuperJump)
 		pDDNetCharacter->m_Flags |= CHARACTERFLAG_ENDLESS_JUMP;
@@ -2027,12 +2133,15 @@ bool CCharacter::ReduceFreeze(float Time)
 
 bool CCharacter::RemoveWeapon(int Slot)
 {
+	if(Slot < 0 || Slot >= NUM_WEAPON_SLOTS)
+		return false;
 	bool Removed = false;
 	if(m_ActiveWeaponSlot == Slot)
 	{
 		// switch to an existing weapon
+		SetWeaponSlot(WEAPON_GAME, false);
 		for(int i = 0; i < NUM_WEAPON_SLOTS; ++i)
-			if(m_apWeaponSlots[i])
+			if(i != Slot && m_apWeaponSlots[i])
 			{
 				SetWeaponSlot(i, true);
 				break;
