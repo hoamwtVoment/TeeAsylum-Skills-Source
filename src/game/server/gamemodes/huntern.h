@@ -4,6 +4,7 @@
 
 #include <game/server/gamecontroller.h>
 #include <game/server/asylum_time.h>
+#include <game/server/gojo_state.h>
 
 class CGameControllerHunterN : public IGameController
 {
@@ -29,12 +30,14 @@ public:
 	bool HasMantleShield(int CID) const { return CID >= 0 && CID < MAX_CLIENTS && m_aMantleShield[CID]; }
 	bool IsMantleInvulnerable(int CID) const;
 	bool CanCombatInteract(int From, int To) const;
-	bool CanWeaponInteract(int From, int To, int WeaponID) const;
+	bool CanWeaponInteract(int From, int To, int WeaponID) const override;
 	// Replaces the status broadcast of one player for a moment.
 	void ShowScreenText(int CID, const char *pText, float Seconds);
 	void ShowJumpscare(int CID, float Seconds);
 	bool ActivateTheWorld(int CID);
 	int TheWorldCooldown(int CID) const;
+	CGojoState *GetGojoState(int CID) override;
+	const CGojoState *GetGojoState(int CID) const override;
 	int MapAnimationStartTick(int SnappingClient, int DefaultStartTick) const override;
 	bool IsRagdollImmune(int CID) const { return m_Mode == MODE_JGN && CID == m_Juggernaut; }
 	void OnGameStart(bool IsRound) override;
@@ -129,6 +132,15 @@ private:
 	int m_aLastDamageFrom[MAX_CLIENTS];
 	int m_aLastDamageTick[MAX_CLIENTS];
 	int m_aScreenTextUntil[MAX_CLIENTS];
+	CGojoState m_aGojo[MAX_CLIENTS];
+	void GiveGojoLoadout(class CCharacter *pChr);
+	void SendGojoLoadout(int CID, bool Detailed);
+	void TickGojo(int CID, bool Advance);
+	bool GojoInfinityBlocks(class CCharacter *pChr, int From, int WeaponID, int Damage);
+	static void ConGojo(IConsole::IResult *pResult, void *pUserData);
+	static void ConGojoStatus(IConsole::IResult *pResult, void *pUserData);
+	static void ConGojoEnergy(IConsole::IResult *pResult, void *pUserData);
+	static void ConInfCursedEnergy(IConsole::IResult *pResult, void *pUserData);
 	int m_aJumpscareStart[MAX_CLIENTS];
 	int m_aJumpscareUntil[MAX_CLIENTS];
 	int m_aUpgradeKills[MAX_CLIENTS][5];

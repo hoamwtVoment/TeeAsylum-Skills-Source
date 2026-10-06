@@ -2,8 +2,11 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 
 #include "entity.h"
+#include "entities/character.h"
 #include "gamecontext.h"
 #include "player.h"
+#include "gamecontroller.h"
+#include "gojo_state.h"
 
 //////////////////////////////////////////////////
 // Entity
@@ -106,6 +109,9 @@ bool NetworkPointClipped(CGameContext *pGameServer, int SnappingClient, vec2 Che
 		ShowDistance = pGameServer->m_apPlayers[SnappingClient]->m_ShowDistance;
 	else
 		ShowDistance = vec2(SHOW_DISTANCE_DEFAULT_X, SHOW_DISTANCE_DEFAULT_Y);
+	CCharacter *pViewer = pGameServer->m_apPlayers[SnappingClient]->GetCharacter();
+	const CGojoState *pGojo = pViewer ? pViewer->Controller()->GetGojoState(SnappingClient) : nullptr;
+	if(pGojo && pGojo->m_Enabled) ShowDistance *= 1.75f;
 
 	float dx = pGameServer->m_apPlayers[SnappingClient]->m_ViewPos.x - CheckPos.x;
 	if(absolute(dx) > maximum(ShowDistance.x, MinView.x))
@@ -128,6 +134,9 @@ bool NetworkLineClipped(CGameContext *pGameServer, int SnappingClient, vec2 From
 		ShowDistance = pGameServer->m_apPlayers[SnappingClient]->m_ShowDistance;
 	else
 		ShowDistance = vec2(SHOW_DISTANCE_DEFAULT_X, SHOW_DISTANCE_DEFAULT_Y);
+	CCharacter *pViewer = pGameServer->m_apPlayers[SnappingClient]->GetCharacter();
+	const CGojoState *pGojo = pViewer ? pViewer->Controller()->GetGojoState(SnappingClient) : nullptr;
+	if(pGojo && pGojo->m_Enabled) ShowDistance *= 1.75f;
 
 	ShowDistance.x = maximum(ShowDistance.x, MinView.x);
 	ShowDistance.y = maximum(ShowDistance.y, MinView.y);
@@ -172,6 +181,9 @@ bool NetworkRectClipped(CGameContext *pGameServer, int SnappingClient, vec2 TL, 
 		ShowDistance = pGameServer->m_apPlayers[SnappingClient]->m_ShowDistance;
 	else
 		ShowDistance = vec2(SHOW_DISTANCE_DEFAULT_X, SHOW_DISTANCE_DEFAULT_Y);
+	CCharacter *pViewer = pGameServer->m_apPlayers[SnappingClient]->GetCharacter();
+	const CGojoState *pGojo = pViewer ? pViewer->Controller()->GetGojoState(SnappingClient) : nullptr;
+	if(pGojo && pGojo->m_Enabled) ShowDistance *= 1.75f;
 
 	ShowDistance.x = maximum(ShowDistance.x, MinView.x);
 	ShowDistance.y = maximum(ShowDistance.y, MinView.y);

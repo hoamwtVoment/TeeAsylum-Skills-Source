@@ -4,6 +4,7 @@
 
 #include <game/mapitems.h>
 #include <game/server/entities/asylum_fx.h>
+#include <game/server/entities/gojo.h>
 #include <game/server/entities/character.h>
 #include <game/server/player.h>
 #include <game/server/weapons.h>
@@ -78,6 +79,10 @@ CGameControllerHunterN::CGameControllerHunterN(int Mode) : IGameController(),
 	InstanceConsole()->Register("asylum_inspect", "i[cid]", CFGFLAG_INSTANCE, ConInspect, this, "Administrator: read-only exact health, inventory and ability diagnostics");
 	InstanceConsole()->Register("asylum_god", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConGod, this, "Administrator: toggle combat/death-tile invulnerability (0 or 1)");
 	InstanceConsole()->Register("asylum_map", "s[map]", CFGFLAG_INSTANCE, ConMap, this, "Administrator: load a physical .map in the main room");
+	InstanceConsole()->Register("asylum_gojo", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConGojo, this, "Administrator: transform into Gojo (0/1), never random");
+	InstanceConsole()->Register("asylum_gojo_status", "i[cid]", CFGFLAG_INSTANCE, ConGojoStatus, this, "Administrator: inspect Gojo identity and effects");
+	InstanceConsole()->Register("asylum_gojo_energy", "i[cid] i[amount]", CFGFLAG_INSTANCE, ConGojoEnergy, this, "Administrator: set cursed energy (0-200) for an enabled Gojo");
+	InstanceConsole()->Register("asylum_test_inf_cursedenergy", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConInfCursedEnergy, this, "Administrator test: infinite cursed energy and Infinity (0/1), no cooldown/windup bypass");
 }
 
 void CGameControllerHunterN::ConStatus(IConsole::IResult *pResult, void *pUserData)
@@ -139,6 +144,11 @@ void CGameControllerHunterN::ConLoadout(IConsole::IResult *pResult, void *pUserD
 	CGameControllerHunterN *pSelf = (CGameControllerHunterN *)pUserData;
 	const int CID = pResult->GetInteger(0);
 	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(CID >= 0 && CID < MAX_CLIENTS && pSelf->m_aGojo[CID].m_Enabled)
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "gojo", "Disable Gojo with asylum_gojo <CID> 0 before changing its identity-only skill loadout");
+		return;
+	}
 	if(!pPlayer || !pPlayer->GetCharacter())
 	{
 		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Player must have an active character in this room");
@@ -171,6 +181,7 @@ void CGameControllerHunterN::ConGive(IConsole::IResult *pResult, void *pUserData
 	if(!pSelf->RequireAdmin(pResult)) return;
 	const int CID = pResult->GetInteger(0), Item = pResult->GetInteger(1);
 	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(CID >= 0 && CID < MAX_CLIENTS && pSelf->m_aGojo[CID].m_Enabled) { pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "gojo", "Gojo has a fixed five-skill loadout; disable the identity first"); return; }
 	if(!pPlayer || !pPlayer->GetCharacter() || Item < 0 || Item >= NUM_ASYLUM_ITEMS || pSelf->m_TourLobby)
 	{
 		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Need a live player, valid item ID and an armed combat map");
@@ -285,6 +296,7 @@ int CGameControllerHunterN::RemainingSeconds() const
 
 void CGameControllerHunterN::ResetPlayerCooldowns(CPlayer *pPlayer)
 {
+	for(int &Tick : m_aGojo[pPlayer->GetCID()].m_NextCast) Tick = 0;
 	pPlayer->m_TheWorldCooldown.Reset();
 	m_aLastRerollTick[pPlayer->GetCID()] = -1000000;
 	CCharacter *pChr = pPlayer->GetCharacter();
@@ -372,6 +384,7 @@ void CGameControllerHunterN::ConTestWeapon(IConsole::IResult *pResult, void *pUs
 	const int CID = pResult->GetInteger(0);
 	const int Item = pResult->GetInteger(1);
 	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(CID >= 0 && CID < MAX_CLIENTS && pSelf->m_aGojo[CID].m_Enabled) { pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "gojo", "Gojo has a fixed five-skill loadout; disable the identity first"); return; }
 	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
 	if(!pChr || !pChr->IsAlive() || Item < 0 || Item >= NUM_ASYLUM_ITEMS)
 	{
@@ -438,6 +451,7 @@ void CGameControllerHunterN::OnWorldReset()
 	int aActive[MAX_CLIENTS], NumActive = 0;
 	for(int CID = 0; CID < MAX_CLIENTS; ++CID)
 	{
+		m_aGojo[CID].ClearEffects();
 		CPlayer *pPlayer = GetPlayerIfInRoom(CID);
 		m_aParticipants[CID] = pPlayer && pPlayer->GetTeam() != TEAM_SPECTATORS;
 		m_aAdminGod[CID] = false;
@@ -495,6 +509,7 @@ void CGameControllerHunterN::Forfeit(int CID)
 void CGameControllerHunterN::OnPlayerJoin(CPlayer *pPlayer)
 {
 	const int CID = pPlayer->GetCID();
+	m_aGojo[CID] = CGojoState();
 	m_aBossSnapCID[CID] = -1;
 	m_aAdminGod[CID] = false;
 	m_aMapVotes[CID] = -1;
@@ -527,6 +542,8 @@ void CGameControllerHunterN::OnPlayerJoin(CPlayer *pPlayer)
 
 void CGameControllerHunterN::OnPlayerLeave(CPlayer *pPlayer)
 {
+	GojoClearEntities(GameWorld(), pPlayer->GetCID());
+	m_aGojo[pPlayer->GetCID()] = CGojoState();
 	GameWorld()->EndTimeStopFor(pPlayer->GetCID());
 	m_aJumpscareStart[pPlayer->GetCID()] = m_aJumpscareUntil[pPlayer->GetCID()] = 0;
 	m_aAdminGod[pPlayer->GetCID()] = false;
@@ -537,6 +554,7 @@ void CGameControllerHunterN::OnPlayerLeave(CPlayer *pPlayer)
 
 void CGameControllerHunterN::OnPlayerChangeTeam(CPlayer *pPlayer, int FromTeam, int ToTeam)
 {
+	if(ToTeam == TEAM_SPECTATORS) GojoClearEntities(GameWorld(), pPlayer->GetCID());
 	if(ToTeam == TEAM_SPECTATORS)
 		GameWorld()->EndTimeStopFor(pPlayer->GetCID());
 	ClearAsylumProgress(pPlayer->GetCID(), m_Mode == MODE_ZS);
@@ -580,6 +598,16 @@ void CGameControllerHunterN::GiveLoadout(CCharacter *pChr, bool Randomize, bool 
 	}
 	m_aLastCombatTick[CID] = Server()->Tick();
 	m_aRegenCarry[CID] = 0;
+	if(m_aGojo[CID].m_Enabled)
+	{
+		if(m_Mode != MODE_GG && !(m_Mode == MODE_ZS && m_aInfected[CID]) && !(m_Mode == MODE_JGN && CID == m_Juggernaut))
+		{
+			GiveGojoLoadout(pChr);
+			return;
+		}
+		GojoClearEntities(GameWorld(), CID);
+		m_aGojo[CID].m_Enabled = false;
+	}
 	// A lucky god-tier roll is announced; with asylum_god_only every roll is one, so stay quiet.
 	bool Lucky = false;
 	if(Randomize || m_aLoadouts[CID][0] < 0)
@@ -645,6 +673,8 @@ void CGameControllerHunterN::GiveLoadout(CCharacter *pChr, bool Randomize, bool 
 void CGameControllerHunterN::OnCharacterSpawn(CCharacter *pChr)
 {
 	const int CID = pChr->GetPlayer()->GetCID();
+	m_aGojo[CID].ClearEffects();
+	m_aGojo[CID].m_LastActionTick = m_aGojo[CID].m_LastHealTick = Server()->Tick();
 	pChr->GetPlayer()->SetClass(CLASS_NONE);
 	pChr->RemoveWeapons();
 	pChr->m_MaxHealth = 100;
@@ -775,6 +805,7 @@ void CGameControllerHunterN::RerollLoadout(CCharacter *pChr)
 	if(!pChr || !pChr->IsAlive() || !GetPlayerIfInRoom(pChr->GetPlayer()->GetCID()))
 		return;
 	const int CID = pChr->GetPlayer()->GetCID();
+	if(m_aGojo[CID].m_Enabled) return;
 	if(m_Mode == MODE_GG)
 	{
 		GameServer()->SendChatTarget(CID, "GG模式不允许重抽进阶武器。");
@@ -809,6 +840,13 @@ int CGameControllerHunterN::MapAnimationStartTick(int SnappingClient, int Defaul
 {
 	if(SnappingClient < 0 || SnappingClient >= MAX_CLIENTS || !GetPlayerIfInRoom(SnappingClient))
 		return DefaultStartTick;
+	const CGojoState &Gojo = m_aGojo[SnappingClient];
+	if(GojoHasDomainMap(GameWorld()) && (Gojo.Immobilized(Server()->Tick()) || (Gojo.m_DomainFadeStart >= 0 && Server()->Tick() - Gojo.m_DomainFadeStart < Server()->TickSpeed() * 3 / 10)))
+	{
+		const int Elapsed = Gojo.Immobilized(Server()->Tick()) ? minimum(5800, (Server()->Tick() - Gojo.m_DomainStart) * 1000 / Server()->TickSpeed()) : 6200 + (Server()->Tick() - Gojo.m_DomainFadeStart) * 1000 / Server()->TickSpeed();
+		const int Offset = (int)(((int64)GOJO_DOMAIN_BASE_MS + Elapsed) * Server()->TickSpeed() / 1000);
+		return Server()->Tick() - Offset;
+	}
 	if(Server()->Tick() >= m_aJumpscareUntil[SnappingClient])
 	{
 		const int VisualMillis = GameWorld()->TimeStopVisualMillis();
@@ -903,6 +941,7 @@ void CGameControllerHunterN::SendLoadout(int CID, bool Detailed)
 	CPlayer *pPlayer = GetPlayerIfInRoom(CID);
 	if(!pPlayer)
 		return;
+	if(m_aGojo[CID].m_Enabled && !m_TourLobby) { SendGojoLoadout(CID, Detailed); return; }
 	char aState[160];
 	if(m_TourLobby)
 	{
@@ -1029,6 +1068,8 @@ int CGameControllerHunterN::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKill
 {
 	CPlayer *pPlayer = pVictim->GetPlayer();
 	const int CID = pPlayer->GetCID();
+	GojoClearEntities(GameWorld(), CID);
+	m_aGojo[CID].ClearEffects();
 	GameWorld()->EndTimeStopFor(CID);
 	m_aPendingReroll[CID] = -1;
 	if(m_TourBoss && m_BossHealth > 0 && Weapon != WEAPON_GAME)
@@ -1124,6 +1165,7 @@ int CGameControllerHunterN::OnCharacterTakeDamage(CCharacter *pChr, vec2 &Force,
 	const int CID = pChr->GetPlayer()->GetCID();
 	if(m_aAdminGod[CID] || pChr->IsProtected() || IsMantleInvulnerable(CID) || !CanCombatInteract(From, CID))
 		return DAMAGE_SKIP;
+	if(GojoInfinityBlocks(pChr, From, WeaponID, Dmg)) return DAMAGE_SKIP;
 	if(m_Mode == MODE_GG && From >= 0 && From < MAX_CLIENTS && From != CID)
 	{
 		// A single melee swing or volley cannot finish two consecutive stages.
@@ -1224,6 +1266,8 @@ void CGameControllerHunterN::OnPostTick()
 	const bool AdvanceOthers = GameWorld()->AdvanceTimeStoppedEntities();
 	const bool PauseOthers = !AdvanceOthers;
 	for(int CID = 0; CID < MAX_CLIENTS; ++CID)
+		TickGojo(CID, !GameWorld()->m_Paused && (!GameWorld()->IsClientTimeStopped(CID) || AdvanceOthers));
+	for(int CID = 0; CID < MAX_CLIENTS; ++CID)
 	{
 		CPlayer *pPlayer = GetPlayerIfInRoom(CID);
 		if(!pPlayer) continue;
@@ -1306,7 +1350,7 @@ void CGameControllerHunterN::OnPostTick()
 			// Item Asylum-style regeneration: after five seconds out of combat,
 			// recover 2.5% of maximum health each second (fractional points are
 			// carried between ticks, so 100 HP alternates 2 and 3 points).
-			if(m_Mode != MODE_GG && pChr->GetHealth() > 0 && pChr->GetHealth() < pChr->m_MaxHealth &&
+			if(!m_aGojo[CID].m_Enabled && m_Mode != MODE_GG && pChr->GetHealth() > 0 && pChr->GetHealth() < pChr->m_MaxHealth &&
 				Server()->Tick() - m_aLastCombatTick[CID] >= Server()->TickSpeed() * 5 &&
 				Server()->Tick() % maximum(1, Server()->TickSpeed()) == 0)
 			{

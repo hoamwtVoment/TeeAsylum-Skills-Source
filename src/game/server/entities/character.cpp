@@ -9,6 +9,8 @@
 #include <new>
 
 #include "character.h"
+#include "gojo.h"
+#include <game/server/gojo_state.h>
 #include "laser.h"
 #include "projectile.h"
 
@@ -263,6 +265,7 @@ void CCharacter::HandleWeaponSwitch()
 
 void CCharacter::FireWeapon()
 {
+	if(IsGojoImmobilized()) return;
 	if(GameWorld()->IsClientFullyTimeStopped(m_pPlayer->GetCID()))
 		return;
 	DoWeaponSwitch();
@@ -372,6 +375,7 @@ void CCharacter::SetEmote(int Emote, int Tick)
 
 void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 {
+	if(IsGojoImmobilized()) return;
 	if(GameWorld()->IsClientFullyTimeStopped(m_pPlayer->GetCID()))
 		return;
 	// check for changes
@@ -391,6 +395,13 @@ void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 
 void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 {
+	if(IsGojoImmobilized())
+	{
+		m_LatestInput = *pNewInput;
+		m_LatestPrevInput = m_LatestPrevPrevInput = m_LatestInput;
+		Antibot()->OnDirectInput(m_pPlayer->GetCID());
+		return;
+	}
 	if(GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID()))
 	{
 		// During slowdown queue input until this character's next virtual Tick.
@@ -452,6 +463,13 @@ vec2 CCharacter::GetAimDirection()
 	return length(Direction) > 0.0f ? normalize(Direction) : vec2(0, -1);
 }
 
+bool CCharacter::IsGojoImmobilized()
+{
+	if(!m_pPlayer) return false;
+	const CGojoState *pState = Controller()->GetGojoState(m_pPlayer->GetCID());
+	return pState && pState->Immobilized(Server()->Tick());
+}
+
 void CCharacter::ApplyWeaponMovementTuning(CTuningParams &Tuning)
 {
 	float BonusTiles = 0.0f;
@@ -487,6 +505,14 @@ void CCharacter::ApplyWeaponMovementTuning(CTuningParams &Tuning)
 		Tuning.m_GroundControlSpeed = maximum(0.0f, (float)Tuning.m_GroundControlSpeed + Bonus);
 		Tuning.m_AirControlSpeed = maximum(0.0f, (float)Tuning.m_AirControlSpeed + Bonus);
 	}
+	const CGojoState *pGojo = Controller()->GetGojoState(m_pPlayer->GetCID());
+	if(pGojo && pGojo->BrainDamaged(Server()->Tick()))
+	{
+		Tuning.m_GroundControlSpeed = (float)Tuning.m_GroundControlSpeed * 0.65f;
+		Tuning.m_AirControlSpeed = (float)Tuning.m_AirControlSpeed * 0.65f;
+		Tuning.m_GroundControlAccel = (float)Tuning.m_GroundControlAccel * 0.65f;
+		Tuning.m_AirControlAccel = (float)Tuning.m_AirControlAccel * 0.65f;
+	}
 }
 
 void CCharacter::ApplyKnockback(vec2 Force, bool LiftGrounded)
@@ -516,6 +542,14 @@ void CCharacter::Tick()
 	Antibot()->OnCharacterTick(m_pPlayer->GetCID());
 
 	m_Core.m_Input = m_Input;
+	const CGojoState *pGojo = Controller()->GetGojoState(m_pPlayer->GetCID());
+	if(pGojo && (pGojo->Immobilized(Server()->Tick()) || pGojo->Carried(Server()->Tick())))
+	{
+		m_Core.m_Input.m_Direction = m_Core.m_Input.m_Jump = m_Core.m_Input.m_Hook = 0;
+		ResetHook();
+		m_Core.ResetDragVelocity();
+		m_Core.m_Vel = pGojo->Immobilized(Server()->Tick()) ? vec2(0, 0) : pGojo->m_CarryVelocity;
+	}
 	CWeapon *pMovementWeapon = CurrentWeapon();
 	if(pMovementWeapon && pMovementWeapon->BlocksHook())
 	{
@@ -531,6 +565,18 @@ void CCharacter::Tick()
 	}
 	const CTuningParams BaseMovementTuning = m_Core.m_pWorld->m_Tuning;
 	ApplyWeaponMovementTuning(m_Core.m_pWorld->m_Tuning);
+	CGojoState *pJumpState = Controller()->GetGojoState(m_pPlayer->GetCID());
+	if(pJumpState && pJumpState->m_Enabled && m_Core.m_Input.m_Jump && !m_PrevInput.m_Jump &&
+		(m_Core.m_Jumped & 2) && m_Core.m_Jumps > 0 && !IsGrounded() && !IsFrozen() && !IsShocked() &&
+		!pJumpState->Carried(Server()->Tick()) && (m_pPlayer->m_AsylumInfCursedEnergy || pJumpState->m_Infinity >= GOJO_EXTRA_JUMP_COST))
+	{
+		// Spend for ONE fresh press, not for held jump and not for free jumps.
+		if(!m_pPlayer->m_AsylumInfCursedEnergy) pJumpState->m_Infinity -= GOJO_EXTRA_JUMP_COST;
+		else pJumpState->m_Infinity = 100;
+		pJumpState->m_LastActionTick = pJumpState->m_LastInfinityJumpTick = Server()->Tick();
+		m_Core.m_Jumped &= ~3;
+		GameWorld()->CreatePlayerSpawn(m_Pos + vec2(0, 12));
+	}
 	const float WeaponSpeedBonus = m_Core.m_pWorld->m_Tuning.m_GroundControlSpeed;
 	if(WeaponSpeedBonus != m_LastWeaponGroundSpeedBonus)
 	{
@@ -603,7 +649,21 @@ void CCharacter::TickDefered()
 	bool StuckBefore = GameServer()->Collision()->TestBox(m_Core.m_Pos, vec2(28.0f, 28.0f));
 
 	m_Core.m_Id = m_pPlayer->GetCID();
-	m_Core.Move();
+	const CGojoState *pGojo = Controller()->GetGojoState(m_pPlayer->GetCID());
+	if(pGojo && pGojo->Immobilized(Server()->Tick())) m_Core.m_Vel = vec2(0, 0);
+	else
+	{
+		if(pGojo && pGojo->BluePulled(Server()->Tick())) m_Core.m_Vel = ClampVel(m_MoveRestrictions, pGojo->m_BluePullVelocity);
+		if(pGojo && pGojo->Carried(Server()->Tick()))
+		{
+			vec2 Push = pGojo->m_CarryTarget - m_Core.m_Pos;
+			const float Limit = length(pGojo->m_CarryVelocity) + 16;
+			if(length(Push) > Limit) Push = normalize(Push) * Limit;
+			m_Core.m_Vel = ClampVel(m_MoveRestrictions, Push);
+		}
+		m_Core.Move();
+	}
+	GojoConstrainMovement(this, StartPos);
 	bool StuckAfterMove = GameServer()->Collision()->TestBox(m_Core.m_Pos, vec2(28.0f, 28.0f));
 	m_Core.Quantize();
 	bool StuckAfterQuant = GameServer()->Collision()->TestBox(m_Core.m_Pos, vec2(28.0f, 28.0f));
@@ -960,8 +1020,10 @@ void CCharacter::SnapCharacter(int SnappingClient, int MappedID)
 	int Tick, Emote = m_EmoteType, Weapon = pCurrentWeapon ? pCurrentWeapon->GetType() : WEAPON_HAMMER, AmmoCount = 0,
 		  Health = 0, Armor = 0, AttackTick = pCurrentWeapon ? pCurrentWeapon->GetAttackTick() : 0;
 
-	const bool TimeStopped = GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID());
-	if(!m_ReckoningTick || GameWorld()->m_Paused || TimeStopped)
+	const bool TimeStopped = GameWorld()->IsClientTimeStopped(m_pPlayer->GetCID()) || IsGojoImmobilized();
+	const CGojoState *pControl = Controller()->GetGojoState(m_pPlayer->GetCID());
+	const bool ForcedMotion = pControl && (pControl->Carried(Server()->Tick()) || pControl->BluePulled(Server()->Tick()));
+	if(!m_ReckoningTick || GameWorld()->m_Paused || TimeStopped || ForcedMotion)
 	{
 		Tick = 0;
 		pCore = &m_Core;
@@ -1217,6 +1279,8 @@ void CCharacter::Snap(int SnappingClient, int OtherMode)
 
 	pDDNetCharacter->m_FreezeEnd = m_DeepFreeze ? -1 : m_FreezeTime == 0 ? 0 :
                                                                                Server()->Tick() + m_FreezeTime;
+	if(IsGojoImmobilized() && pDDNetCharacter->m_FreezeEnd >= 0)
+		pDDNetCharacter->m_FreezeEnd = maximum(pDDNetCharacter->m_FreezeEnd, Server()->Tick() + Server()->TickSpeed());
 	pDDNetCharacter->m_Jumps = m_Core.m_Jumps;
 	pDDNetCharacter->m_TeleCheckpoint = m_TeleCheckpoint;
 	pDDNetCharacter->m_StrongWeakID = SnappingClient == m_pPlayer->GetCID() ? 1 : 0;
@@ -2095,7 +2159,7 @@ bool CCharacter::Freeze(float Seconds, bool BlockHoldFire)
 
 bool CCharacter::IsFrozen()
 {
-	return m_DeepFreeze || m_FreezeTime > 0;
+	return m_DeepFreeze || m_FreezeTime > 0 || IsGojoImmobilized();
 }
 
 bool CCharacter::IsDeepFrozen()
@@ -2164,8 +2228,17 @@ bool CCharacter::RemoveWeapon(int Slot)
 	return Removed;
 }
 
+static bool CanEquipGojoWeapon(CCharacter *pCharacter, int Type)
+{
+	if(!GojoIsWeapon(Type)) return true;
+	CPlayer *pPlayer = pCharacter->GetPlayer();
+	const CGojoState *pState = pPlayer ? pCharacter->Controller()->GetGojoState(pPlayer->GetCID()) : nullptr;
+	return pState && pState->m_Enabled;
+}
+
 bool CCharacter::GiveWeapon(int Slot, int Type, int Ammo)
 {
+	if(!CanEquipGojoWeapon(this, Type)) return false;
 	if(Type == WEAPON_ID_NONE)
 		return RemoveWeapon(Slot);
 #define REGISTER_WEAPON(WEAPTYPE, CLASS) \
@@ -2196,6 +2269,7 @@ bool CCharacter::GiveWeapon(int Slot, int Type, int Ammo)
 
 void CCharacter::ForceSetWeapon(int Slot, int Type, int Ammo)
 {
+	if(!CanEquipGojoWeapon(this, Type)) return;
 	if(Type == WEAPON_ID_NONE)
 		RemoveWeapon(Slot);
 #define REGISTER_WEAPON(WEAPTYPE, CLASS) \
@@ -2226,6 +2300,7 @@ void CCharacter::ForceSetWeapon(int Slot, int Type, int Ammo)
 
 void CCharacter::SetOverrideWeapon(int Slot, int Type, int Ammo)
 {
+	if(!CanEquipGojoWeapon(this, Type)) return;
 	if(Type == WEAPON_ID_NONE)
 	{
 		bool IsActive = m_ActiveWeaponSlot == Slot;
@@ -2267,6 +2342,7 @@ void CCharacter::SetOverrideWeapon(int Slot, int Type, int Ammo)
 
 void CCharacter::SetPowerUpWeapon(int Type, int Ammo)
 {
+	if(!CanEquipGojoWeapon(this, Type)) return;
 	if(Type == WEAPON_ID_NONE)
 	{
 		if(m_pPowerupWeapon)

@@ -69,6 +69,12 @@ REGISTER_WEAPON(WEAPON_ID_ASYLUM_MOYAI, CAsylumMoyai)
 REGISTER_WEAPON(WEAPON_ID_ASYLUM_MICROPHONE, CAsylumMicrophone)
 REGISTER_WEAPON(WEAPON_ID_ASYLUM_MASTERSPARK, CAsylumMasterSpark)
 REGISTER_WEAPON(WEAPON_ID_ASYLUM_THEWORLD, CAsylumTheWorld)
+// Identity-only skills. Do not register these in Asylum's random item table.
+REGISTER_WEAPON(WEAPON_ID_GOJO_FIST, CGojoFist)
+REGISTER_WEAPON(WEAPON_ID_GOJO_BLUE, CGojoBlue)
+REGISTER_WEAPON(WEAPON_ID_GOJO_RED, CGojoRed)
+REGISTER_WEAPON(WEAPON_ID_GOJO_PURPLE, CGojoPurple)
+REGISTER_WEAPON(WEAPON_ID_GOJO_DOMAIN, CGojoDomainSkill)
 
 #else
 
@@ -86,6 +92,7 @@ REGISTER_WEAPON(WEAPON_ID_ASYLUM_THEWORLD, CAsylumTheWorld)
 
 #include "weapons/jughammer.h" // Hunter
 #include "weapons/asylum.h"
+#include "weapons/gojo.h"
 
 enum
 {

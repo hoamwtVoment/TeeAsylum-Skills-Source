@@ -13,6 +13,8 @@
 #include <map>
 #include <vector>
 
+struct CGojoState;
+
 #define INSTANCE_CONFIG_INT(Pointer, Command, Default, Min, Max, Flag, Desc) \
 	{ \
 		*Pointer = Default; \
@@ -752,6 +754,9 @@ public:
 	virtual void ExplosionCombatNpc(vec2 Pos, int From, int WeaponID, int Damage) {}
 	virtual int CombatNpcWeaponDamage(int From, int WeaponID) { return 0; }
 	virtual float BaseWalkspeedTiles() const { return -1.0f; }
+	virtual struct CGojoState *GetGojoState(int CID) { return nullptr; }
+	virtual const struct CGojoState *GetGojoState(int CID) const { return nullptr; }
+	virtual bool CanWeaponInteract(int From, int To, int WeaponID) const { return false; }
 	// Called after damage has actually been applied (armor and health loss are
 	// already resolved), before a possible Die() callback.
 	virtual void OnCharacterDamageApplied(class CCharacter *pChr, int From, int WeaponID, int HealthLoss, int ArmorLoss) {}

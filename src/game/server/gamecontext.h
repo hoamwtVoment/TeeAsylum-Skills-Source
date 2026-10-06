@@ -135,6 +135,10 @@ class CGameContext : public IGameServer
 	static void ConAsylumTestWeapon(IConsole::IResult *pResult, void *pUserData);
 	static void ConAsylumTestLoadout(IConsole::IResult *pResult, void *pUserData);
 	static void ConAsylumTestItems(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumGojo(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumGojoStatus(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumGojoEnergy(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestInfCursedEnergy(IConsole::IResult *pResult, void *pUserData);
 
 	// HunterN commands
 	static void ConSetClass(IConsole::IResult *pResult, void *pUserData);

@@ -11,6 +11,7 @@
 #include "entities/pickup.h"
 #include "gamecontext.h"
 #include "gamecontroller.h"
+#include "gojo_state.h"
 #include "player.h"
 
 #include "entities/door.h"
@@ -1787,7 +1788,8 @@ void IGameController::Snap(int SnappingClient)
 	if(m_SuddenDeath)
 		GameStateFlags |= GAMESTATEFLAG_SUDDENDEATH;
 	// Suppress prediction only for stopped listeners; the caster stays live.
-	if(GameWorld()->IsClientTimeStopped(SnappingClient))
+	const CGojoState *pGojo = GetGojoState(SnappingClient);
+	if(GameWorld()->IsClientTimeStopped(SnappingClient) || (pGojo && pGojo->Immobilized(Server()->Tick())))
 		GameStateFlags |= isSixUp ? (int)protocol7::GAMESTATEFLAG_PAUSED : (int)GAMESTATEFLAG_PAUSED;
 
 	if(!isSixUp)

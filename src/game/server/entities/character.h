@@ -264,6 +264,9 @@ public:
 	int GetArmor() { return m_Armor; };
 	int GetHealth() const { return m_Health; }
 	vec2 GetAimDirection();
+	vec2 GetAimTarget() const { return m_Pos + vec2(m_LatestInput.m_TargetX, m_LatestInput.m_TargetY); }
+	bool IsFireHeld() const { return (m_LatestInput.m_Fire & 1) != 0; }
+	bool IsGojoImmobilized();
 	void SetArmor(int Armor) { m_Armor = Armor; };
 	CCharacterCore GetCore() { return m_Core; };
 	void SetCore(CCharacterCore Core) { m_Core = Core; };

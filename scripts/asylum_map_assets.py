@@ -242,6 +242,7 @@ def embed(map_file, image_file, sounds):
         # Appended foreground group, parallax 0: fixed to the viewport, not a tee.
         data.add(GROUP, ints([3, 0, 0, 0, 0, layer_index, 1, 0, 0, 0, 0, 0] + name_ints("AsylumFX", 3)))
     embed_time_stop_gray(data)
+    embed_gojo_domain(data)
     data.save(map_file)
     print(f"{map_file.relative_to(ROOT)}: {len(data.typed(SOUND))} samples, 4:3 quad, {map_file.stat().st_size} bytes")
 
@@ -286,6 +287,112 @@ def embed_time_stop_gray(data):
         payload = values(group[2])
         payload[6] += 1
         group[2] = ints(payload)
+
+
+def embed_gojo_domain(data):
+    """User-provided Unlimited Void background, never a player-covering foreground.
+
+    Put its group immediately before the game group. Existing layers/data
+    indices remain untouched; only group IDs after the insertion are shifted.
+    """
+    base = 2147400000
+    source = ROOT / "assets/gojo/unlimited-void.jpg"
+    probe = subprocess.check_output(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                                     "-show_entries", "stream=width,height", "-of", "csv=p=0", str(source)])
+    width, height = map(int, probe.strip().split(b","))
+    rgba = subprocess.check_output(["ffmpeg", "-v", "error", "-i", str(source),
+                                    "-f", "rawvideo", "-pix_fmt", "rgba", "-"])
+    if len(rgba) != width * height * 4:
+        raise ValueError("Invalid Unlimited Void image decode")
+    images = data.typed(IMAGE)
+    image = next((item for item in images
+                  if data.get(values(item[2])[4]).rstrip(b"\0") == b"gojo_unlimited_void"), None)
+    if image:
+        image_index = images.index(image)
+        payload = values(image[2])
+        payload[1:4] = [width, height, 0]
+        payload[5] = data.put(rgba, payload[5])
+        image[2] = ints(payload)
+    else:
+        image_index = len(images)
+        data.add(IMAGE, ints([1, width, height, 0, data.put(b"gojo_unlimited_void\0"), data.put(rgba)]))
+    envelopes = data.typed(ENVELOPE)
+    envelope = next((item for item in envelopes
+                     if decode_name(values(item[2])[4:12]) == "gojo_domain_black"), None)
+    points_item = data.typed(ENVPOINTS)[0]
+    points = ints([0, 0, 1024, 1024, 1024, 0,
+                   base, 1, 1024, 1024, 1024, 0,
+                   base + 160, 0, 1024, 1024, 1024, 1024,
+                   base + 6200, 1, 1024, 1024, 1024, 1024,
+                   base + 6500, 0, 1024, 1024, 1024, 0,
+                   INT_MAX, 0, 1024, 1024, 1024, 0])
+    if envelope:
+        index = envelopes.index(envelope)
+        start = values(envelope[2])[2]
+        updated = bytearray(points_item[2])
+        updated[start * 24:(start + 6) * 24] = points
+        points_item[2] = bytes(updated)
+    else:
+        index = len(envelopes)
+        start = len(points_item[2]) // 24
+        points_item[2] += points
+        data.add(ENVELOPE, ints([2, 4, start, 6] + name_ints("gojo_domain_black", 8) + [1]))
+    corners = [-32768 * 1024, -24576 * 1024, 32768 * 1024, -24576 * 1024,
+               -32768 * 1024, 24576 * 1024, 32768 * 1024, 24576 * 1024, 0, 0]
+    quad = ints(corners + [0, 0, 0, 255] * 4 +
+                [0, 0, 1024, 0, 0, 1024, 1024, 1024] + [-1, 0, index, 0])
+    # Black underlay covers wide/zoomed viewports; the original 16:9 image
+    # retains its aspect ratio and is centered over it. No cropping/editing.
+    half_width = 900
+    half_height = round(half_width * height / width)
+    image_corners = [-half_width * 1024, -half_height * 1024, half_width * 1024, -half_height * 1024,
+                     -half_width * 1024, half_height * 1024, half_width * 1024, half_height * 1024, 0, 0]
+    quad += ints(image_corners + [255, 255, 255, 255] * 4 +
+                 [0, 0, 1024, 0, 0, 1024, 1024, 1024] + [-1, 0, index, 0])
+    layers = data.typed(LAYER)
+    existing = next((item for item in layers if values(item[2])[1] == 3
+                     and decode_name(values(item[2])[7:10]) == "GojoBlack"), None)
+    if existing:
+        payload = values(existing[2])
+        data.put(quad, payload[5])
+        payload[4] = 2
+        payload[6] = image_index
+        existing[2] = ints(payload)
+        layer_index = layers.index(existing)
+    else:
+        layer_index = len(layers)
+        data.add(LAYER, ints([0, 3, 0, 2, 2, data.put(quad), image_index] + name_ints("GojoBlack", 3)))
+    groups = data.typed(GROUP)
+    old_bg = next((group for group in groups if decode_name(values(group[2])[12:15]) == "GojoBG"), None)
+    if old_bg:
+        data.items.remove(old_bg)
+        groups.remove(old_bg)
+    game_group = next((group for group in groups
+                       if any(values(layer[2])[1] == 2 and (values(layer[2])[6] & 1)
+                              for layer in layers[values(group[2])[5]:values(group[2])[5] + values(group[2])[6]])), None)
+    # Maps often put opaque art and game tiles in the SAME group. Split only
+    # that group's metadata so black renders AFTER the art, BEFORE game tiles
+    # and characters. Collision/data/layer indices and transforms stay intact.
+    if game_group:
+        original = values(game_group[2])
+        game_layer = next(i for i in range(original[5], original[5] + original[6])
+                          if values(layers[i][2])[1] == 2 and (values(layers[i][2])[6] & 1))
+        prefix = game_layer - original[5]
+        if prefix:
+            foreground = list(original)
+            foreground[5] = game_layer
+            foreground[6] -= prefix
+            original[6] = prefix
+            game_group[2] = ints(original)
+            continuation = [GROUP, 0, ints(foreground)]
+            data.items.insert(data.items.index(game_group) + 1, continuation)
+            game_group = continuation
+    payload = ints([3, 0, 0, 0, 0, layer_index, 1, 0, 0, 0, 0, 0] + name_ints("GojoBG", 3))
+    new_group = [GROUP, 0, payload]
+    insertion = data.items.index(game_group) if game_group else data.items.index(groups[0])
+    data.items.insert(insertion, new_group)
+    for group_id, group in enumerate(data.typed(GROUP)):
+        group[1] = group_id
 
 
 def main():

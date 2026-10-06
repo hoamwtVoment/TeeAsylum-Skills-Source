@@ -2898,6 +2898,26 @@ void CGameContext::ConAsylumTestItems(IConsole::IResult *pResult, void *pUserDat
 	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_items", true);
 }
 
+void CGameContext::ConAsylumGojo(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_gojo");
+}
+
+void CGameContext::ConAsylumGojoStatus(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_gojo_status");
+}
+
+void CGameContext::ConAsylumGojoEnergy(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_gojo_energy");
+}
+
+void CGameContext::ConAsylumTestInfCursedEnergy(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_inf_cursedenergy");
+}
+
 void CGameContext::OnConsoleInit()
 {
 	m_pServer = Kernel()->RequestInterface<IServer>();
@@ -2944,6 +2964,10 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("asylum_test_weapon", "i[cid] i[item]", CFGFLAG_SERVER, ConAsylumTestWeapon, this, "Test: replace and select one item by ID; room and slot are automatic");
 	Console()->Register("asylum_test_loadout", "i[cid] i[melee] i[ranged] i[utility]", CFGFLAG_SERVER, ConAsylumTestLoadout, this, "Test: equip three items in the target player's current room");
 	Console()->Register("asylum_test_items", "?i[cid]", CFGFLAG_SERVER, ConAsylumTestItems, this, "Test: list item IDs in your room, optional target CID, or first ready Asylum room");
+	Console()->Register("asylum_gojo", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumGojo, this, "Administrator: transform a player into Gojo (0/1); room is automatic");
+	Console()->Register("asylum_gojo_status", "i[cid]", CFGFLAG_SERVER, ConAsylumGojoStatus, this, "Administrator: inspect Gojo identity, five cooldowns and domain effects");
+	Console()->Register("asylum_gojo_energy", "i[cid] i[amount]", CFGFLAG_SERVER, ConAsylumGojoEnergy, this, "Administrator: set Gojo cursed energy (0-200); room is automatic");
+	Console()->Register("asylum_test_inf_cursedenergy", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumTestInfCursedEnergy, this, "Test: toggle infinite cursed energy AND Infinity (0/1); target room is automatic");
 
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 	Console()->Chain("sv_room", ConchainUpdateRoomVotes, this);

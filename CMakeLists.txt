@@ -975,6 +975,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   entities/dumbentity.h
   entities/flag.cpp
   entities/flag.h
+  entities/gojo.cpp
+  entities/gojo.h
   entities/gun.cpp
   entities/gun.h
   entities/laser.cpp
@@ -1006,6 +1008,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamemodes/dm.h
   gamemodes/huntern.cpp
   gamemodes/huntern.h
+  gamemodes/huntern_gojo.cpp
   gamemodes/huntern_tour.cpp
   gamemodes/instagib.cpp
   gamemodes/instagib.h
@@ -1017,6 +1020,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamemodes/tdm.h
   gameworld.cpp
   gameworld.h
+  gojo_state.h
   player.cpp
   player.h
   teams.cpp
@@ -1031,6 +1035,8 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   weapons/asylum_god.cpp
   weapons/explodinglaser.cpp
   weapons/explodinglaser.h
+  weapons/gojo.cpp
+  weapons/gojo.h
   weapons/grenade.cpp
   weapons/grenade.h
   weapons/hammer.cpp
