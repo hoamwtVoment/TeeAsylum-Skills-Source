@@ -3,6 +3,7 @@
 #define GAME_SERVER_GAMEMODES_HUNTERN_H
 
 #include <game/server/gamecontroller.h>
+#include <game/server/asylum_time.h>
 
 class CGameControllerHunterN : public IGameController
 {
@@ -29,6 +30,12 @@ public:
 	bool IsMantleInvulnerable(int CID) const;
 	bool CanCombatInteract(int From, int To) const;
 	bool CanWeaponInteract(int From, int To, int WeaponID) const;
+	// Replaces the status broadcast of one player for a moment.
+	void ShowScreenText(int CID, const char *pText, float Seconds);
+	void ShowJumpscare(int CID, float Seconds);
+	bool ActivateTheWorld(int CID);
+	int TheWorldCooldown(int CID) const;
+	int MapAnimationStartTick(int SnappingClient, int DefaultStartTick) const override;
 	bool IsRagdollImmune(int CID) const { return m_Mode == MODE_JGN && CID == m_Juggernaut; }
 	void OnGameStart(bool IsRound) override;
 	void OnWorldReset() override;
@@ -101,6 +108,8 @@ private:
 	int m_SpawnArmor;
 	int m_StartingLives;
 	int m_RoundSeconds;
+	int m_GodChance;
+	int m_GodOnly;
 	bool m_RoundActive;
 	int m_Juggernaut;
 	int m_InfectionBonusSeconds;
@@ -119,6 +128,9 @@ private:
 	int m_aLastDamageWeapon[MAX_CLIENTS];
 	int m_aLastDamageFrom[MAX_CLIENTS];
 	int m_aLastDamageTick[MAX_CLIENTS];
+	int m_aScreenTextUntil[MAX_CLIENTS];
+	int m_aJumpscareStart[MAX_CLIENTS];
+	int m_aJumpscareUntil[MAX_CLIENTS];
 	int m_aUpgradeKills[MAX_CLIENTS][5];
 	int m_aPendingConsume[MAX_CLIENTS];
 	int m_aPendingUpgrade[MAX_CLIENTS];
@@ -141,9 +153,14 @@ private:
 	void FinishPlayer(int CID, const char *pReason);
 	void FinishSide(bool InfectedWon, const char *pReason);
 	void Forfeit(int CID);
+	void ResetPlayerCooldowns(class CPlayer *pPlayer);
 	static void ConStatus(IConsole::IResult *pResult, void *pUserData);
 	static void ConItems(IConsole::IResult *pResult, void *pUserData);
 	static void ConLoadout(IConsole::IResult *pResult, void *pUserData);
+	static void ConNoCooldown(IConsole::IResult *pResult, void *pUserData);
+	static void ConResetCooldown(IConsole::IResult *pResult, void *pUserData);
+	static void ConTestGod(IConsole::IResult *pResult, void *pUserData);
+	static void ConTestWeapon(IConsole::IResult *pResult, void *pUserData);
 	static void ConGive(IConsole::IResult *pResult, void *pUserData);
 	static void ConInspect(IConsole::IResult *pResult, void *pUserData);
 	bool RequireAdmin(IConsole::IResult *pResult);

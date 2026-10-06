@@ -232,7 +232,7 @@ bool CGameControllerHunterN::BossHitPlayer(CCharacter *pChr, int Damage, vec2 Fo
 	const int Before = maximum(0, pChr->GetHealth()) + pChr->GetArmor();
 	pChr->TakeDamage(Force, Damage, -2, WEAPON_HAMMER, WEAPON_ID_WORLD, false);
 	const int Lost = Before - maximum(0, pChr->GetHealth()) - pChr->GetArmor();
-	if(Lost > 0 && Freeze > 0 && pChr->IsAlive())
+	if((Lost > 0 || (pChr->GetPlayer()->m_AsylumTestGod && !pChr->IsProtected() && !IsMantleInvulnerable(pChr->GetPlayer()->GetCID()))) && Freeze > 0 && pChr->IsAlive())
 	{
 		CWeapon *pWeapon = pChr->CurrentWeapon();
 		if(!pWeapon || !AsylumIsWeapon(pWeapon->GetWeaponID()) || !((CAsylumWeapon *)pWeapon)->RagdollImmune()) pChr->Freeze(Freeze, true);
@@ -589,8 +589,8 @@ void CGameControllerHunterN::OnSnap(int SnappingClient)
 		if(!pShot) continue;
 		const float Speed = maximum(1.0f, (float)GameServer()->Tuning()->m_ShotgunSpeed);
 		pShot->m_X = round_to_int(Shot.m_Pos.x); pShot->m_Y = round_to_int(Shot.m_Pos.y);
-		pShot->m_VelX = round_to_int(Shot.m_Vel.x * Server()->TickSpeed() * 100 / Speed);
-		pShot->m_VelY = round_to_int(Shot.m_Vel.y * Server()->TickSpeed() * 100 / Speed);
+		pShot->m_VelX = GameWorld()->IsTimeStopped() ? 0 : round_to_int(Shot.m_Vel.x * Server()->TickSpeed() * 100 / Speed);
+		pShot->m_VelY = GameWorld()->IsTimeStopped() ? 0 : round_to_int(Shot.m_Vel.y * Server()->TickSpeed() * 100 / Speed);
 		pShot->m_StartTick = Server()->Tick(); pShot->m_Type = WEAPON_SHOTGUN;
 	}
 }

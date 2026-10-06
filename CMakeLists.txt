@@ -955,9 +955,14 @@ set_src(ENGINE_SERVER GLOB_RECURSE src/engine/server
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
   alloc.h
+  asylum_time.h
   classes.h
   ddracechat.cpp
   ddracecommands.cpp
+  entities/asylum_fx.cpp
+  entities/asylum_fx.h
+  entities/asylum_spark.cpp
+  entities/asylum_spark.h
   entities/asylum_visual_laser.cpp
   entities/asylum_visual_laser.h
   entities/character.cpp
@@ -1023,6 +1028,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   weapons.h
   weapons/asylum.cpp
   weapons/asylum.h
+  weapons/asylum_god.cpp
   weapons/explodinglaser.cpp
   weapons/explodinglaser.h
   weapons/grenade.cpp

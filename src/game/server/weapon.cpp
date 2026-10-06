@@ -22,6 +22,8 @@ CWeapon::CWeapon(CCharacter *pOwnerChar)
 
 void CWeapon::Tick()
 {
+	if(IgnoreCooldown())
+		m_ReloadTimer = 0;
 	if(m_ReloadTimer > 0)
 	{
 		m_ReloadTimer--;
@@ -59,8 +61,12 @@ void CWeapon::TickPaused()
 
 void CWeapon::HandleFire(vec2 Direction)
 {
-	if(m_ReloadTimer > 0)
+	if(GameWorld()->IsClientFullyTimeStopped(Character()->GetPlayer()->GetCID()))
 		return;
+	if(m_ReloadTimer > 0 && !IgnoreCooldown())
+		return;
+	if(IgnoreCooldown())
+		m_ReloadTimer = 0;
 
 	if(m_Ammo == 0)
 	{
@@ -94,7 +100,9 @@ void CWeapon::HandleFire(vec2 Direction)
 	if(m_Ammo > 0)
 		m_Ammo -= 1;
 
-	if(m_ReloadTimer == 0)
+	if(IgnoreCooldown())
+		m_ReloadTimer = 0;
+	else if(m_ReloadTimer == 0)
 		m_ReloadTimer = m_FireDelay * Server()->TickSpeed() / 1000;
 }
 

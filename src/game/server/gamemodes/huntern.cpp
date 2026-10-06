@@ -3,6 +3,7 @@
 #include <engine/storage.h>
 
 #include <game/mapitems.h>
+#include <game/server/entities/asylum_fx.h>
 #include <game/server/entities/character.h>
 #include <game/server/player.h>
 #include <game/server/weapons.h>
@@ -50,6 +51,8 @@ CGameControllerHunterN::CGameControllerHunterN(int Mode) : IGameController(),
 		m_aParticipants[CID] = m_aInfected[CID] = false;
 		m_aPendingReroll[CID] = m_aLastDamageWeapon[CID] = m_aLastDamageFrom[CID] = m_aLastDamageTick[CID] = -1;
 		m_aLastRerollTick[CID] = -1000000;
+		m_aScreenTextUntil[CID] = 0;
+		m_aJumpscareStart[CID] = m_aJumpscareUntil[CID] = 0;
 		ClearAsylumProgress(CID);
 	}
 	INSTANCE_CONFIG_INT(&m_RespawnDelay, "asylum_respawn_delay", 2, 1, 10, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Respawn delay in seconds");
@@ -59,10 +62,18 @@ CGameControllerHunterN::CGameControllerHunterN(int Mode) : IGameController(),
 	INSTANCE_CONFIG_INT(&m_SpawnArmor, "asylum_spawn_armor", 0, 0, 0, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Deprecated: Item Asylum spawns have no armor");
 	INSTANCE_CONFIG_INT(&m_StartingLives, "asylum_lives", 3, 1, 10, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Lives in ELIM and for JGN challengers");
 	INSTANCE_CONFIG_INT(&m_RoundSeconds, "asylum_round_seconds", gs_aModeSeconds[m_Mode], 10, 3600, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Round duration in seconds");
+	INSTANCE_CONFIG_INT(&m_GodChance, "asylum_god_chance", 0, 0, 100, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Chance in percent per slot to roll a god-tier (★) item; 0 disables random god-tier items (default)");
+	INSTANCE_CONFIG_INT(&m_GodOnly, "asylum_god_only", 0, 0, 1, CFGFLAG_CHAT | CFGFLAG_INSTANCE, "Roll only god-tier (★) items");
 	INSTANCE_CONFIG_INT(&m_LobbySeconds, "asylum_lobby_seconds", 45, 5, 120, CFGFLAG_INSTANCE, "Touch-board voting duration in Tour lobbies");
 	InstanceConsole()->Register("asylum_status", "", CFGFLAG_CHAT | CFGFLAG_INSTANCE | CFGFLAG_NO_CONSENT, ConStatus, this, "Show mode, timer, lives and equipment");
 	InstanceConsole()->Register("asylum_items", "", CFGFLAG_CHAT | CFGFLAG_INSTANCE | CFGFLAG_NO_CONSENT, ConItems, this, "List random items, upgrade modules and resulting weapons");
 	InstanceConsole()->Register("asylum_loadout", "i[cid] i[melee] i[ranged] i[utility]", CFGFLAG_INSTANCE, ConLoadout, this, "Administrator: equip valid category items on an existing character");
+	InstanceConsole()->Register("asylum_test_nocd", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConNoCooldown, this, "Administrator test: toggle no cooldowns for one player (0/1)");
+	InstanceConsole()->Register("asylum_test_reset_cd", "i[cid]", CFGFLAG_INSTANCE, ConResetCooldown, this, "Administrator test: reset one player's weapon and The World cooldowns once");
+	InstanceConsole()->Register("asylum_test_god", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConTestGod, this, "Administrator test: toggle invulnerability for one player (0/1)");
+	InstanceConsole()->Register("asylum_test_weapon", "i[cid] i[item]", CFGFLAG_INSTANCE, ConTestWeapon, this, "Administrator test: replace and select one item in its automatic category slot");
+	InstanceConsole()->Register("asylum_test_loadout", "i[cid] i[melee] i[ranged] i[utility]", CFGFLAG_INSTANCE, ConLoadout, this, "Administrator test: equip three category items; asylum_loadout remains a compatible alias");
+	InstanceConsole()->Register("asylum_test_items", "", CFGFLAG_INSTANCE, ConItems, this, "Administrator test: list item IDs");
 	InstanceConsole()->Register("asylum_give", "i[cid] i[item]", CFGFLAG_INSTANCE, ConGive, this, "Administrator: replace only the item's corresponding inventory slot");
 	InstanceConsole()->Register("asylum_inspect", "i[cid]", CFGFLAG_INSTANCE, ConInspect, this, "Administrator: read-only exact health, inventory and ability diagnostics");
 	InstanceConsole()->Register("asylum_god", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConGod, this, "Administrator: toggle combat/death-tile invulnerability (0 or 1)");
@@ -93,16 +104,23 @@ void CGameControllerHunterN::ConStatus(IConsole::IResult *pResult, void *pUserDa
 void CGameControllerHunterN::ConItems(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameControllerHunterN *pSelf = (CGameControllerHunterN *)pUserData;
-	char aHeader[96];
-	int RandomItems = 0, Modules = 0;
+	int RandomItems = 0, Modules = 0, NumGod = 0;
 	for(int Item = 0; Item < NUM_ASYLUM_ITEMS; ++Item)
 	{
-		if(AsylumItem(Item).m_Category < ASYLUM_CATEGORY_UPGRADE)
+		NumGod += AsylumItem(Item).m_God;
+		if(AsylumItem(Item).m_Category < ASYLUM_CATEGORY_UPGRADE && !AsylumItem(Item).m_God)
 			++RandomItems;
 		else if(AsylumItem(Item).m_Category == ASYLUM_CATEGORY_UPGRADE)
 			++Modules;
 	}
-	str_format(aHeader, sizeof(aHeader), "随机装备%d件，另含%d个击杀升级模块及%d件升级武器。", RandomItems, Modules, NUM_ASYLUM_ITEMS - RandomItems - Modules);
+	char aGod[64];
+	if(pSelf->m_GodOnly)
+		str_copy(aGod, "当前只抽★大神武器", sizeof(aGod));
+	else
+		str_format(aGod, sizeof(aGod), "每槽%d%%大神概率", pSelf->m_GodChance);
+	char aHeader[256];
+	str_format(aHeader, sizeof(aHeader), "普通随机装备%d件，升级模块%d件，升级武器%d件，★大神武器%d件；%s。",
+		RandomItems, Modules, NUM_ASYLUM_ITEMS - RandomItems - Modules - NumGod, NumGod, aGod);
 	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aHeader);
 	if(pResult->m_ClientID >= 0 && pResult->m_ClientID < MAX_CLIENTS)
 		pSelf->GameServer()->SendChatTarget(pResult->m_ClientID, aHeader);
@@ -135,7 +153,8 @@ void CGameControllerHunterN::ConLoadout(IConsole::IResult *pResult, void *pUserD
 	for(int Slot = 0; Slot < 3; ++Slot)
 	{
 		aItems[Slot] = pResult->GetInteger(Slot + 1);
-		if(aItems[Slot] < 0 || aItems[Slot] >= NUM_ASYLUM_ITEMS || AsylumItem(aItems[Slot]).m_Category != Slot)
+		if(aItems[Slot] < 0 || aItems[Slot] >= NUM_ASYLUM_ITEMS ||
+			(AsylumItem(aItems[Slot]).m_Category != Slot && !(Slot == 1 && AsylumItem(aItems[Slot]).m_Category > ASYLUM_CATEGORY_UPGRADE)))
 		{
 			pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Items must be valid melee, ranged, utility indices in that order");
 			return;
@@ -184,7 +203,7 @@ void CGameControllerHunterN::ConInspect(IConsole::IResult *pResult, void *pUserD
 	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
 	if(!pChr) { pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Need a live player in this room"); return; }
 	char aBuf[256];
-	str_format(aBuf, sizeof(aBuf), "inspect cid=%d hp=%d armor=%d god=%d items=%d,%d,%d,%d phase=%d", CID, pChr->GetHealth(), pChr->GetArmor(), pSelf->m_aAdminGod[CID], pSelf->m_aLoadouts[CID][0], pSelf->m_aLoadouts[CID][1], pSelf->m_aLoadouts[CID][2], pSelf->m_aLoadouts[CID][3], pChr->Core()->m_AsylumPhase);
+	str_format(aBuf, sizeof(aBuf), "inspect cid=%d hp=%d armor=%d god=%d items=%d,%d,%d,%d phase=%d test_god=%d nocd=%d world_cd_ticks=%d", CID, pChr->GetHealth(), pChr->GetArmor(), pSelf->m_aAdminGod[CID], pSelf->m_aLoadouts[CID][0], pSelf->m_aLoadouts[CID][1], pSelf->m_aLoadouts[CID][2], pSelf->m_aLoadouts[CID][3], pChr->Core()->m_AsylumPhase, pPlayer->m_AsylumTestGod, pPlayer->m_AsylumNoCooldown, pSelf->TheWorldCooldown(CID));
 	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aBuf);
 	CWeapon *pHeld = pChr->CurrentWeapon();
 	if(pHeld && AsylumIsWeapon(pHeld->GetWeaponID()))
@@ -264,6 +283,135 @@ int CGameControllerHunterN::RemainingSeconds() const
 	return maximum(0, m_RoundSeconds + m_InfectionBonusSeconds - (Server()->Tick() - m_GameStartTick) / Server()->TickSpeed());
 }
 
+void CGameControllerHunterN::ResetPlayerCooldowns(CPlayer *pPlayer)
+{
+	pPlayer->m_TheWorldCooldown.Reset();
+	m_aLastRerollTick[pPlayer->GetCID()] = -1000000;
+	CCharacter *pChr = pPlayer->GetCharacter();
+	if(!pChr)
+		return;
+	for(int Slot = 0; Slot < NUM_WEAPON_SLOTS; ++Slot)
+	{
+		CWeapon *apWeapons[] = {pChr->GetWeapon(Slot), pChr->GetOverrideWeapon(Slot)};
+		for(CWeapon *pWeapon : apWeapons)
+			if(pWeapon && AsylumIsWeapon(pWeapon->GetWeaponID()))
+				static_cast<CAsylumWeapon *>(pWeapon)->ResetCooldowns();
+	}
+	CWeapon *pPowerup = pChr->GetPowerupWeapon();
+	if(pPowerup && AsylumIsWeapon(pPowerup->GetWeaponID()))
+		static_cast<CAsylumWeapon *>(pPowerup)->ResetCooldowns();
+}
+
+void CGameControllerHunterN::ConNoCooldown(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameControllerHunterN *pSelf = static_cast<CGameControllerHunterN *>(pUserData);
+	const int CID = pResult->GetInteger(0);
+	const int Enabled = pResult->GetInteger(1);
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(!pPlayer || (Enabled != 0 && Enabled != 1))
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Player must be in this room; enabled must be 0 or 1");
+		return;
+	}
+	pPlayer->m_AsylumNoCooldown = Enabled != 0;
+	if(Enabled)
+		pSelf->ResetPlayerCooldowns(pPlayer);
+	char aBuf[160];
+	str_format(aBuf, sizeof(aBuf), "CID %d: Asylum no-cooldown testing %s", CID, Enabled ? "enabled" : "disabled");
+	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aBuf);
+	pSelf->GameServer()->SendChatTarget(CID, Enabled ? "[测试] 已开启无冷却；前摇、持续时间、R充能和时停限制仍保留。" : "[测试] 已恢复正常冷却。");
+}
+
+void CGameControllerHunterN::ConResetCooldown(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameControllerHunterN *pSelf = static_cast<CGameControllerHunterN *>(pUserData);
+	const int CID = pResult->GetInteger(0);
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(!pPlayer)
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Player must be in this room");
+		return;
+	}
+	pSelf->ResetPlayerCooldowns(pPlayer);
+	char aBuf[96];
+	str_format(aBuf, sizeof(aBuf), "CID %d: Asylum cooldowns reset", CID);
+	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aBuf);
+	pSelf->GameServer()->SendChatTarget(CID, "[测试] 已清空当前武器技能和 The World 冷却一次，不改变装备和血甲。");
+}
+
+void CGameControllerHunterN::ConTestGod(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameControllerHunterN *pSelf = static_cast<CGameControllerHunterN *>(pUserData);
+	const int CID = pResult->GetInteger(0);
+	const int Enabled = pResult->GetInteger(1);
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(!pPlayer || (Enabled != 0 && Enabled != 1))
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Player must be in this room; enabled must be 0 or 1");
+		return;
+	}
+	pPlayer->m_AsylumTestGod = Enabled != 0;
+	CCharacter *pChr = pPlayer->GetCharacter();
+	if(Enabled && pChr)
+	{
+		// An immortal test target should be hittable immediately, not hidden
+		// behind its initial spawn shield. Existing freezes are left untouched.
+		pChr->Protect(0.0f, false);
+	}
+	char aBuf[128];
+	str_format(aBuf, sizeof(aBuf), "CID %d: Asylum god-mode testing %s", CID, Enabled ? "enabled" : "disabled");
+	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aBuf);
+	pSelf->GameServer()->SendChatTarget(CID, Enabled ?
+		"[测试] 已开启锁血无敌：可被击中，血甲不减少；命中音效、击退、冻结、跳脸与时停照常。" :
+		"[测试] 已关闭无敌。");
+}
+
+void CGameControllerHunterN::ConTestWeapon(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameControllerHunterN *pSelf = static_cast<CGameControllerHunterN *>(pUserData);
+	const int CID = pResult->GetInteger(0);
+	const int Item = pResult->GetInteger(1);
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
+	if(!pChr || !pChr->IsAlive() || Item < 0 || Item >= NUM_ASYLUM_ITEMS)
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Player must have an active character; item ID must be valid");
+		return;
+	}
+	if(pSelf->m_Mode == MODE_GG || (pSelf->m_Mode == MODE_ZS && pSelf->m_aInfected[CID]) ||
+		(pSelf->m_Mode == MODE_JGN && CID == pSelf->m_Juggernaut))
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "Fixed loadout in this mode/role; use FFA to test arbitrary items");
+		return;
+	}
+	const int Category = AsylumItem(Item).m_Category;
+	const int Slot = Category <= ASYLUM_CATEGORY_UPGRADE ? Category : 1;
+	if(pSelf->m_TourLobby)
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", "The Tour lobby has no weapon loadouts; switch to a combat map first");
+		return;
+	}
+	if(Slot == 1)
+	{
+		for(int &Kills : pSelf->m_aUpgradeKills[CID]) Kills = 0;
+		pChr->RemoveWeapon(3); pSelf->m_aLoadouts[CID][3] = -1;
+	}
+	pSelf->m_aPendingConsume[CID] &= ~(1 << Slot);
+	pSelf->m_aPendingUpgrade[CID] = -1;
+	pSelf->m_aLoadouts[CID][Slot] = Item;
+	pSelf->m_aPendingReroll[CID] = -1;
+	// Only replace this slot; other weapons' cooldowns/charge and blood/armor stay.
+	pChr->SetPowerUpWeapon(WEAPON_ID_NONE);
+	pChr->SetOverrideWeapon(Slot, WEAPON_ID_NONE);
+	pChr->RemoveWeapon(Slot);
+	pChr->GiveWeapon(Slot, AsylumWeaponID(Item), -1);
+	pChr->SetWeaponSlot(Slot, false);
+	pSelf->SendLoadout(CID, true);
+	char aBuf[224];
+	str_format(aBuf, sizeof(aBuf), "CID %d: slot %d -> %d %s", CID, Slot + 1, Item, AsylumItem(Item).m_pName);
+	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum", aBuf);
+}
+
 int CGameControllerHunterN::ProgressItem(int CID) const
 {
 	return gs_aProgressItems[clamp(m_aStages[CID], 0, NUM_PROGRESS_STAGES - 1)];
@@ -298,6 +446,7 @@ void CGameControllerHunterN::OnWorldReset()
 		m_aInfected[CID] = false;
 		m_aPendingReroll[CID] = m_aLastDamageWeapon[CID] = m_aLastDamageFrom[CID] = m_aLastDamageTick[CID] = -1;
 		m_aLastRerollTick[CID] = -1000000;
+		m_aJumpscareStart[CID] = m_aJumpscareUntil[CID] = 0;
 		ClearAsylumProgress(CID);
 		for(int &Item : m_aLoadouts[CID])
 			Item = -1;
@@ -352,6 +501,8 @@ void CGameControllerHunterN::OnPlayerJoin(CPlayer *pPlayer)
 	for(int &Item : m_aLoadouts[CID])
 		Item = -1;
 	m_aPendingReroll[CID] = -1;
+	m_aScreenTextUntil[CID] = 0;
+	m_aJumpscareStart[CID] = m_aJumpscareUntil[CID] = 0;
 	ClearAsylumProgress(CID);
 	pPlayer->SetClass(CLASS_NONE);
 	GameServer()->SendChatTarget(CID, gs_apRules[m_Mode]);
@@ -376,6 +527,8 @@ void CGameControllerHunterN::OnPlayerJoin(CPlayer *pPlayer)
 
 void CGameControllerHunterN::OnPlayerLeave(CPlayer *pPlayer)
 {
+	GameWorld()->EndTimeStopFor(pPlayer->GetCID());
+	m_aJumpscareStart[pPlayer->GetCID()] = m_aJumpscareUntil[pPlayer->GetCID()] = 0;
 	m_aAdminGod[pPlayer->GetCID()] = false;
 	m_aMapVotes[pPlayer->GetCID()] = -1;
 	Forfeit(pPlayer->GetCID());
@@ -384,6 +537,8 @@ void CGameControllerHunterN::OnPlayerLeave(CPlayer *pPlayer)
 
 void CGameControllerHunterN::OnPlayerChangeTeam(CPlayer *pPlayer, int FromTeam, int ToTeam)
 {
+	if(ToTeam == TEAM_SPECTATORS)
+		GameWorld()->EndTimeStopFor(pPlayer->GetCID());
 	ClearAsylumProgress(pPlayer->GetCID(), m_Mode == MODE_ZS);
 	if(m_RoundActive && !IsWarmup() && (LimitedLives() || m_Mode == MODE_ZS || (m_TourBoss && m_BossMaxHealth > 0)))
 	{
@@ -425,10 +580,14 @@ void CGameControllerHunterN::GiveLoadout(CCharacter *pChr, bool Randomize, bool 
 	}
 	m_aLastCombatTick[CID] = Server()->Tick();
 	m_aRegenCarry[CID] = 0;
+	// A lucky god-tier roll is announced; with asylum_god_only every roll is one, so stay quiet.
+	bool Lucky = false;
 	if(Randomize || m_aLoadouts[CID][0] < 0)
 		for(int Slot = 0; Slot < 3; ++Slot)
 		{
-			m_aLoadouts[CID][Slot] = AsylumRandomItem(Slot);
+			const bool God = m_GodOnly || secure_rand_below(100) < m_GodChance;
+			Lucky |= God && !m_GodOnly;
+			m_aLoadouts[CID][Slot] = AsylumRandomItem(Slot, God);
 			// The juggernaut's heavy arsenal is intentionally asymmetric.
 			if(m_Mode == MODE_JGN && CID != m_Juggernaut)
 				while(m_aLoadouts[CID][Slot] == ASYLUM_AMERICA || m_aLoadouts[CID][Slot] == ASYLUM_TASER)
@@ -457,6 +616,26 @@ void CGameControllerHunterN::GiveLoadout(CCharacter *pChr, bool Randomize, bool 
 	pChr->SetWeaponSlot(m_Mode == MODE_GG || (m_Mode == MODE_ZS && m_aInfected[CID]) ? 0 : 1, false);
 	m_aPendingReroll[CID] = -1;
 	SendLoadout(CID, true);
+	if(Lucky)
+	{
+		// Mode overrides above may have replaced the rolled items.
+		char aItems[192] = "";
+		for(int Slot = 0; Slot < 3; ++Slot)
+			if(AsylumItem(m_aLoadouts[CID][Slot]).m_God)
+			{
+				if(aItems[0])
+					str_append(aItems, "、", sizeof(aItems));
+				str_append(aItems, AsylumItem(m_aLoadouts[CID][Slot]).m_pName, sizeof(aItems));
+			}
+		if(aItems[0])
+		{
+			char aAnnouncement[256];
+			str_format(aAnnouncement, sizeof(aAnnouncement), "★ 大神武器降临！%s 抽到了 %s", Server()->ClientName(CID), aItems);
+			SendChatTarget(-1, aAnnouncement);
+			AsylumPlayMeme(GameWorld(), ASYLUM_MEME_FANFARE, pChr->m_Pos, true, CmaskOne(CID));
+			AsylumPlayMeme(GameWorld(), ASYLUM_MEME_FANFARE, pChr->m_Pos, false, ~CmaskOne(CID));
+		}
+	}
 	char aBuf[96];
 	str_format(aBuf, sizeof(aBuf), "loadout cid=%d mode=%d items=%d,%d,%d", CID, m_Mode,
 		m_aLoadouts[CID][0], m_aLoadouts[CID][1], m_aLoadouts[CID][2]);
@@ -479,7 +658,7 @@ void CGameControllerHunterN::OnCharacterSpawn(CCharacter *pChr)
 	pChr->IncreaseHealth(pChr->m_MaxHealth);
 	pChr->SetArmor(0);
 	pChr->SetWeaponTimerType(WEAPON_TIMER_INDIVIDUAL);
-	pChr->Protect((float)m_SpawnProtection, true);
+	pChr->Protect(pChr->GetPlayer()->m_AsylumTestGod ? 0.0f : (float)m_SpawnProtection, true);
 	m_aLastDamageFrom[CID] = m_aLastDamageWeapon[CID] = m_aLastDamageTick[CID] = -1;
 	GiveLoadout(pChr, true, true);
 }
@@ -601,13 +780,90 @@ void CGameControllerHunterN::RerollLoadout(CCharacter *pChr)
 		GameServer()->SendChatTarget(CID, "GG模式不允许重抽进阶武器。");
 		return;
 	}
-	if(Server()->Tick() - m_aLastRerollTick[CID] < Server()->TickSpeed() * 10)
+	if(!pChr->GetPlayer()->m_AsylumNoCooldown && Server()->Tick() - m_aLastRerollTick[CID] < Server()->TickSpeed() * 10)
 	{
 		GameServer()->SendChatTarget(CID, "重抽道具共享10秒冷却；再次抽到骰子也不会重置。");
 		return;
 	}
 	m_aLastRerollTick[CID] = Server()->Tick();
 	m_aPendingReroll[CID] = Server()->Tick();
+}
+
+void CGameControllerHunterN::ShowScreenText(int CID, const char *pText, float Seconds)
+{
+	if(CID < 0 || CID >= MAX_CLIENTS || !GetPlayerIfInRoom(CID))
+		return;
+	m_aScreenTextUntil[CID] = Server()->Tick() + round_to_int(Seconds * Server()->TickSpeed());
+	GameServer()->SendBroadcast(pText, CID, false);
+}
+
+void CGameControllerHunterN::ShowJumpscare(int CID, float Seconds)
+{
+	if(CID < 0 || CID >= MAX_CLIENTS || !GetPlayerIfInRoom(CID) || !AsylumHasJumpscareMap(GameWorld()))
+		return;
+	m_aJumpscareStart[CID] = Server()->Tick();
+	m_aJumpscareUntil[CID] = Server()->Tick() + round_to_int(clamp(Seconds, 0.0f, ASYLUM_JUMPSCARE_FADE_MS / 1000.0f) * Server()->TickSpeed());
+}
+
+int CGameControllerHunterN::MapAnimationStartTick(int SnappingClient, int DefaultStartTick) const
+{
+	if(SnappingClient < 0 || SnappingClient >= MAX_CLIENTS || !GetPlayerIfInRoom(SnappingClient))
+		return DefaultStartTick;
+	if(Server()->Tick() >= m_aJumpscareUntil[SnappingClient])
+	{
+		const int VisualMillis = GameWorld()->TimeStopVisualMillis();
+		if(VisualMillis >= 0 && AsylumHasTimeStopMap(GameWorld()))
+		{
+			const int Offset = (int)(((int64)ASYLUM_WORLD_GRAY_BASE_MS + VisualMillis) * Server()->TickSpeed() / 1000);
+			return Server()->Tick() - Offset;
+		}
+		return DefaultStartTick;
+	}
+	// The synchronized color envelope only shows in the last ~3 seconds before
+	// INT32_MAX milliseconds. Leave margins for old clients' float precision.
+	// 64-bit multiplication avoids overflow; only the transmitted clock changes.
+	const int Offset = (int)((int64)ASYLUM_JUMPSCARE_START_MS * Server()->TickSpeed() / 1000);
+	return m_aJumpscareStart[SnappingClient] - Offset;
+}
+
+int CGameControllerHunterN::TheWorldCooldown(int CID) const
+{
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? GetPlayerIfInRoom(CID) : nullptr;
+	return pPlayer && !pPlayer->m_AsylumNoCooldown ? pPlayer->m_TheWorldCooldown.Remaining(Server()->Tick()) : 0;
+}
+
+bool CGameControllerHunterN::ActivateTheWorld(int CID)
+{
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? GetPlayerIfInRoom(CID) : nullptr;
+	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
+	if(!pChr || !pChr->IsAlive() || pChr->IsFrozen() || pChr->IsDisabled() ||
+		TheWorldCooldown(CID) > 0 || (!IsGameRunning() && !IsWarmup()) ||
+		!GameWorld()->StartTimeStop(CID, ASYLUM_WORLD_SECONDS * Server()->TickSpeed()))
+		return false;
+	if(pPlayer->m_AsylumNoCooldown)
+		pPlayer->m_TheWorldCooldown.Reset();
+	else
+		pPlayer->m_TheWorldCooldown.Activate(Server()->Tick(), Server()->TickSpeed());
+	const vec2 Origin = pChr->m_Pos;
+	const float Diagonal = length(vec2((float)GameServer()->Collision()->GetWidth(),
+		(float)GameServer()->Collision()->GetHeight()) * 32.0f);
+	for(int Listener = 0; Listener < MAX_CLIENTS; ++Listener)
+	{
+		CPlayer *pListener = GetPlayerIfInRoom(Listener);
+		if(!pListener)
+			continue;
+		CCharacter *pCharacter = pListener->GetCharacter();
+		const vec2 ListenerPos = pCharacter ? pCharacter->m_Pos : pListener->m_ViewPos;
+		const int Level = AsylumWorldVolumeLevel(distance(Origin, ListenerPos), Diagonal);
+		char aSample[32];
+		str_format(aSample, sizeof(aSample), "the_world_%02d", Level);
+		// Targeted global samples avoid the client's short default spatial cutoff.
+		// Volume is baked into variants of the SAME user recording, never synthesized.
+		if(!AsylumPlayMapSound(GameWorld(), aSample, Origin, true, CmaskOne(Listener)))
+			GameWorld()->CreateSoundGlobal(SOUND_CTF_RETURN, CmaskOne(Listener));
+	}
+	SendChatTarget(-1, "ザ・ワールド！");
+	return true;
 }
 
 bool CGameControllerHunterN::CanCombatInteract(int From, int To) const
@@ -719,6 +975,10 @@ void CGameControllerHunterN::SendLoadout(int CID, bool Detailed)
 	if(m_aMantleLives[CID] > 0)
 		str_format(aExtra, sizeof(aExtra), "Mantle %s | 余%d命 | %.1fs | 充能%d/170", m_aMantleShield[CID] ? "就绪" : "恢复中",
 			m_aMantleLives[CID], maximum(0, m_aMantleReadyTick[CID] - Server()->Tick()) / (float)Server()->TickSpeed(), m_aMantleCharge[CID]);
+	if(pPlayer->m_AsylumNoCooldown)
+		str_copy(aExtra, "测试模式：无冷却", sizeof(aExtra));
+	if(pPlayer->m_AsylumTestGod)
+		str_append(aExtra, " | 无敌", sizeof(aExtra));
 	char aSkills[192];
 	str_copy(aSkills, m_Mode == MODE_GG ? "GG：附加技能禁用" : "E / R：当前装备无附加技能", sizeof(aSkills));
 	CWeapon *pActive = pChr->GetActiveWeapon() >= 0 && pChr->GetActiveWeapon() < NUM_WEAPON_SLOTS ? pChr->GetWeapon(pChr->GetActiveWeapon()) : nullptr;
@@ -769,6 +1029,7 @@ int CGameControllerHunterN::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKill
 {
 	CPlayer *pPlayer = pVictim->GetPlayer();
 	const int CID = pPlayer->GetCID();
+	GameWorld()->EndTimeStopFor(CID);
 	m_aPendingReroll[CID] = -1;
 	if(m_TourBoss && m_BossHealth > 0 && Weapon != WEAPON_GAME)
 	{
@@ -789,6 +1050,16 @@ int CGameControllerHunterN::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKill
 	if(!IsGameRunning() || !m_RoundActive || Weapon == WEAPON_GAME)
 		return DEATH_NO_SUICIDE_PANATY | DEATH_SKIP_SCORE;
 	const bool ValidKill = pKiller && pKiller != pPlayer && GetPlayerIfInRoom(pKiller->GetCID()) == pKiller;
+	if(ValidKill && CanCombatInteract(pKiller->GetCID(), CID) &&
+		(m_Mode != MODE_TDM || pKiller->GetTeam() != pPlayer->GetTeam()))
+	{
+		const bool Deferred = GameWorld()->IsTimeStopActive();
+		const int Reduction = pKiller->m_TheWorldCooldown.AwardKill(Server()->Tick(), Server()->TickSpeed(), Deferred);
+		if(Reduction > 0)
+			GameServer()->SendChatTarget(pKiller->GetCID(), Deferred ?
+				"[The World] 有效击杀：时停结束后返还2秒冷却（本次最多10秒）。" :
+				"[The World] 有效击杀：冷却减少2秒（本次最多10秒）。");
+	}
 	// Only a genuine last hit by this same weapon unlocks its module; world,
 	// suicide, blocked, teammate and another weapon's kills never count.
 	if(ValidKill && m_aLastDamageTick[CID] == Server()->Tick() && m_aLastDamageFrom[CID] == pKiller->GetCID() &&
@@ -935,7 +1206,7 @@ void CGameControllerHunterN::ActivateAsylumSkill(int CID, bool Ultimate)
 		return;
 	CPlayer *pPlayer = GetPlayerIfInRoom(CID);
 	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
-	if(!pChr || !pChr->IsAlive() || pChr->IsFrozen() || pChr->IsDisabled())
+	if(!pChr || !pChr->IsAlive() || pChr->IsFrozen() || pChr->IsDisabled() || GameWorld()->IsClientTimeStopped(CID))
 		return;
 	if(m_Mode == MODE_GG)
 	{
@@ -949,30 +1220,50 @@ void CGameControllerHunterN::ActivateAsylumSkill(int CID, bool Ultimate)
 
 void CGameControllerHunterN::OnPostTick()
 {
-	if(m_Mode == MODE_TOUR && !GameWorld()->m_Paused) TickTour();
-	// The room controller ticks before the world even while paused. Maintain
-	// only the new absolute-tick timers so pause time cannot regenerate a
-	// shield or satisfy out-of-combat healing.
-	if(GameWorld()->m_Paused)
+	const bool TimeStopActive = GameWorld()->IsTimeStopActive();
+	const bool AdvanceOthers = GameWorld()->AdvanceTimeStoppedEntities();
+	const bool PauseOthers = !AdvanceOthers;
+	for(int CID = 0; CID < MAX_CLIENTS; ++CID)
 	{
+		CPlayer *pPlayer = GetPlayerIfInRoom(CID);
+		if(!pPlayer) continue;
+		if(TimeStopActive || GameWorld()->m_Paused)
+			pPlayer->m_TheWorldCooldown.Pause(Server()->Tick());
+		else
+			pPlayer->m_TheWorldCooldown.ApplyPending(Server()->Tick());
+	}
+	// Absolute timers follow the same skipped ticks as the world and Boss AI.
+	// The caster's inventory and movement keep advancing; The World CD does not.
+	if(PauseOthers)
+	{
+		if(!GameWorld()->m_Paused)
+		{
+			++m_GameStartTick;
+			if(m_NextZoneDamageTick > 0) ++m_NextZoneDamageTick;
+		}
 		if(m_Mode == MODE_TOUR)
 		{
 			if(m_LobbyStartTick >= 0) ++m_LobbyStartTick;
 			for(int *pTimer : {&m_BossDrinkUntil, &m_BossNextTeleport, &m_BossNextAttack,
-				&m_BossStunUntil, &m_BossDashUntil, &m_BossShadowUntil, &m_BossGrabUntil})
+				&m_BossStunUntil, &m_BossDashUntil, &m_BossShadowUntil, &m_BossGrabUntil, &m_BossLastFireTick})
 				if(*pTimer > 0) ++*pTimer;
 		}
 		for(int CID = 0; CID < MAX_CLIENTS; ++CID)
 		{
+			if(!GameWorld()->m_Paused && !GameWorld()->IsClientTimeStopped(CID)) continue;
 			if(m_aMantleReadyTick[CID] > 0) ++m_aMantleReadyTick[CID];
 			if(m_aMantleInvulnerableUntil[CID] > 0) ++m_aMantleInvulnerableUntil[CID];
 			++m_aLastCombatTick[CID];
+			if(m_aPendingReroll[CID] >= 0) ++m_aPendingReroll[CID];
+			if(m_aLastRerollTick[CID] > 0) ++m_aLastRerollTick[CID];
+			if(m_aJumpscareUntil[CID] > Server()->Tick()) { ++m_aJumpscareStart[CID]; ++m_aJumpscareUntil[CID]; }
 		}
-		return;
 	}
+	if(GameWorld()->m_Paused) return;
+	if(m_Mode == MODE_TOUR && AdvanceOthers) TickTour();
 	if(!IsGameRunning() && !IsWarmup())
 		return;
-	if(IsGameRunning() && m_SafeZoneActive && m_RoundActive && Server()->Tick() >= m_NextZoneDamageTick)
+	if(AdvanceOthers && IsGameRunning() && m_SafeZoneActive && m_RoundActive && Server()->Tick() >= m_NextZoneDamageTick)
 	{
 		m_NextZoneDamageTick = Server()->Tick() + Server()->TickSpeed();
 		m_SafeZoneRadius = maximum(64.0f, m_SafeZoneRadius - 24.0f);
@@ -994,6 +1285,8 @@ void CGameControllerHunterN::OnPostTick()
 	{
 		CPlayer *pPlayer = GetPlayerIfInRoom(CID);
 		if(!pPlayer || pPlayer->GetTeam() == TEAM_SPECTATORS)
+			continue;
+		if(GameWorld()->IsClientTimeStopped(CID) && !AdvanceOthers)
 			continue;
 		CCharacter *pChr = pPlayer->GetCharacter();
 		if(pChr)
@@ -1026,7 +1319,7 @@ void CGameControllerHunterN::OnPostTick()
 		}
 		if(!pChr && !pPlayer->m_RespawnDisabled && Server()->Tick() >= pPlayer->m_RespawnTick)
 			pPlayer->Respawn();
-		if(Server()->Tick() % maximum(1, Server()->TickSpeed() / 2) == 0)
+		if(Server()->Tick() % maximum(1, Server()->TickSpeed() / 2) == 0 && Server()->Tick() >= m_aScreenTextUntil[CID])
 			SendLoadout(CID, false);
 	}
 }
@@ -1074,7 +1367,7 @@ void CGameControllerHunterN::FinishSide(bool InfectedWon, const char *pReason)
 
 void CGameControllerHunterN::DoWincheckMatch()
 {
-	if(!m_RoundActive || !IsGameRunning())
+	if(!m_RoundActive || !IsGameRunning() || GameWorld()->IsTimeStopped())
 		return;
 	if(m_Mode == MODE_TOUR && (m_TourLobby || m_TourBoss || m_TourChangingMap)) return;
 	const bool TimeUp = RemainingSeconds() <= 0 ||

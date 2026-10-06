@@ -940,6 +940,8 @@ void IGameController::OnInternalEntity(int Index, vec2 Pos, int Layer, int Flags
 
 void IGameController::OnKill(CPlayer *pPlayer)
 {
+	if(GameWorld()->IsClientFullyTimeStopped(pPlayer->GetCID()))
+		return;
 	if(m_KillDelay == -1)
 		return;
 	if(pPlayer->m_LastKill && pPlayer->m_LastKill + Server()->TickSpeed() * m_KillDelay > Server()->Tick())
@@ -1784,6 +1786,9 @@ void IGameController::Snap(int SnappingClient)
 
 	if(m_SuddenDeath)
 		GameStateFlags |= GAMESTATEFLAG_SUDDENDEATH;
+	// Suppress prediction only for stopped listeners; the caster stays live.
+	if(GameWorld()->IsClientTimeStopped(SnappingClient))
+		GameStateFlags |= isSixUp ? (int)protocol7::GAMESTATEFLAG_PAUSED : (int)GAMESTATEFLAG_PAUSED;
 
 	if(!isSixUp)
 	{
@@ -1798,6 +1803,7 @@ void IGameController::Snap(int SnappingClient)
 		else
 			pGameInfoObj->m_RoundStartTick = m_GameStartTick;
 		pGameInfoObj->m_RoundStartTick -= MapMusicOffsetSeconds() * Server()->TickSpeed();
+		pGameInfoObj->m_RoundStartTick = MapAnimationStartTick(SnappingClient, pGameInfoObj->m_RoundStartTick);
 		pGameInfoObj->m_WarmupTimer = WarmupTimer;
 
 		pGameInfoObj->m_RoundNum = 0;

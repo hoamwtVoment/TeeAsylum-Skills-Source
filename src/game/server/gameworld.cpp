@@ -25,6 +25,8 @@ CGameWorld::CGameWorld(int Team, CGameContext *pGameServer, IGameController *pCo
 
 	m_Paused = false;
 	m_ResetRequested = false;
+	m_AdvanceTimeStoppedEntities = true;
+	m_TimeStopAdvanceTick = -1;
 	for(auto &pFirstEntityType : m_apFirstEntityTypes)
 		pFirstEntityType = 0;
 }
@@ -43,6 +45,65 @@ CGameWorld::~CGameWorld()
 CEntity *CGameWorld::FindFirst(int Type)
 {
 	return Type < 0 || Type >= NUM_ENTTYPES ? 0 : m_apFirstEntityTypes[Type];
+}
+
+bool CGameWorld::IsTimeStopped() const
+{
+	return m_TimeStop.Influencing(m_pServer->Tick());
+}
+
+bool CGameWorld::IsTimeStopActive() const
+{
+	return m_TimeStop.Active(m_pServer->Tick());
+}
+
+bool CGameWorld::AdvanceTimeStoppedEntities()
+{
+	if(m_TimeStopAdvanceTick != Server()->Tick())
+	{
+		m_TimeStopAdvanceTick = Server()->Tick();
+		m_AdvanceTimeStoppedEntities = !m_Paused && m_TimeStop.AdvanceOthers(Server()->Tick());
+	}
+	return m_AdvanceTimeStoppedEntities;
+}
+
+bool CGameWorld::IsClientTimeStopped(int CID) const
+{
+	return m_TimeStop.StopsClient(CID, m_pServer->Tick());
+}
+
+bool CGameWorld::IsClientFullyTimeStopped(int CID) const
+{
+	return IsClientTimeStopped(CID) && m_TimeStop.FullyStopped(m_pServer->Tick());
+}
+
+void CGameWorld::EndTimeStop()
+{
+	m_TimeStop.End(m_pServer->Tick());
+}
+
+int CGameWorld::TimeStopVisualMillis() const
+{
+	return m_TimeStop.VisualMillis(m_pServer->Tick(), m_pServer->TickSpeed());
+}
+
+bool CGameWorld::IsEntityTimeStopped(CEntity *pEntity) const
+{
+	if(!IsTimeStopped() || m_AdvanceTimeStoppedEntities)
+		return false;
+	// ALL non-character entities stop, including the caster's new bullets.
+	return pEntity->m_ObjType != ENTTYPE_CHARACTER ||
+		IsClientTimeStopped(static_cast<CCharacter *>(pEntity)->GetPlayer()->GetCID());
+}
+
+bool CGameWorld::StartTimeStop(int Owner, int DurationTicks)
+{
+	CCharacter *pOwner = m_pGameServer->GetPlayerChar(Owner);
+	if(m_Paused || !pOwner || !pOwner->IsAlive() || pOwner->GameWorld() != this)
+		return false;
+	return m_TimeStop.Start(Owner, m_pServer->Tick(), DurationTicks,
+		ASYLUM_WORLD_WINDUP_MS * m_pServer->TickSpeed() / 1000,
+		ASYLUM_WORLD_AUDIO_LEAD_MS * m_pServer->TickSpeed() / 1000);
 }
 
 int CGameWorld::FindEntities(vec2 Pos, float Radius, CEntity **ppEnts, int Max, int Type)
@@ -151,6 +212,7 @@ void CGameWorld::OnPostSnap()
 
 void CGameWorld::Reset()
 {
+	m_TimeStop.Reset();
 	// reset all entities
 	for(auto *pEnt : m_apFirstEntityTypes)
 		for(; pEnt;)
@@ -187,7 +249,22 @@ void CGameWorld::Tick()
 {
 	if(m_ResetRequested)
 		Reset();
+	if(!IsTimeStopActive() && m_TimeStop.Owner() >= 0)
+		EndTimeStop();
+	if(IsTimeStopActive())
+	{
+		CCharacter *pOwner = m_pGameServer->GetPlayerChar(m_TimeStop.Owner());
+		if(!pOwner || !pOwner->IsAlive() || pOwner->IsDisabled() || pOwner->GetPlayer()->IsPaused() ||
+			pOwner->GameWorld() != this ||
+			(!Controller()->IsGameRunning() && !Controller()->IsWarmup() && !Controller()->IsGamePaused()))
+			EndTimeStop();
+		else if(m_Paused)
+			m_TimeStop.Pause();
+	}
 
+	// One fractional virtual clock for all stopped entities: broad smoothstep
+	// slowdown, then zero Tick/physics advances. Never scale stored velocities.
+	AdvanceTimeStoppedEntities();
 	if(!m_Paused)
 	{
 		// update all objects
@@ -195,7 +272,10 @@ void CGameWorld::Tick()
 			for(; pEnt;)
 			{
 				m_pNextTraverseEntity = pEnt->m_pNextTypeEntity;
-				pEnt->Tick();
+				if(IsEntityTimeStopped(pEnt))
+					pEnt->TickPaused();
+				else
+					pEnt->Tick();
 				pEnt = m_pNextTraverseEntity;
 			}
 
@@ -203,7 +283,8 @@ void CGameWorld::Tick()
 			for(; pEnt;)
 			{
 				m_pNextTraverseEntity = pEnt->m_pNextTypeEntity;
-				pEnt->TickDefered();
+				if(!IsEntityTimeStopped(pEnt))
+					pEnt->TickDefered();
 				pEnt = m_pNextTraverseEntity;
 			}
 	}
@@ -473,4 +554,29 @@ void CGameWorld::CreateSoundGlobal(int Sound, int64 Mask)
 	CNetEvent_SoundGlobal *pEvent = (CNetEvent_SoundGlobal *)m_Events.Create(NETEVENTTYPE_SOUNDGLOBAL, sizeof(CNetEvent_SoundGlobal), Mask);
 	if(pEvent)
 		pEvent->m_SoundID = Sound;
+}
+
+void CGameWorld::CreateMapSound(vec2 Pos, int Sound, int64 Mask)
+{
+	if(Sound < 0)
+		return;
+	CNetEvent_MapSoundWorld *pEvent = (CNetEvent_MapSoundWorld *)m_Events.Create(NETEVENTTYPE_MAPSOUNDWORLD, sizeof(CNetEvent_MapSoundWorld), Mask);
+	if(pEvent)
+	{
+		pEvent->m_X = round_to_int(Pos.x);
+		pEvent->m_Y = round_to_int(Pos.y);
+		pEvent->m_SoundID = Sound;
+	}
+}
+
+void CGameWorld::CreateMapSoundGlobal(int Sound, int64 Mask)
+{
+	if(Sound < 0)
+		return;
+	CNetMsg_Sv_MapSoundGlobal Msg;
+	Msg.m_SoundID = Sound;
+	// Direct messages must be room-scoped, just like this world's snapshots.
+	for(int CID = 0; CID < MAX_CLIENTS; ++CID)
+		if(CmaskIsSet(Mask, CID) && Controller()->GetPlayerIfInRoom(CID))
+			Server()->SendPackMsg(&Msg, MSGFLAG_VITAL | MSGFLAG_NORECORD, CID);
 }

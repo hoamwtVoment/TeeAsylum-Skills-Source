@@ -22,6 +22,13 @@ enum EAsylumItem
 	ASYLUM_9MM, ASYLUM_SUPPRESSED_PISTOL, ASYLUM_SSG08, ASYLUM_BLASTER,
 	ASYLUM_UPGRADE_9MM, ASYLUM_UPGRADE_SUPPRESSED, ASYLUM_UPGRADE_SSG08,
 	ASYLUM_MICROSMG, ASYLUM_SUPPRESSED_MAC10, ASYLUM_AWP,
+	// ★ God-tier items: rare per-slot rolls (asylum_god_chance), loud on purpose.
+	ASYLUM_BANHAMMER, ASYLUM_BIRCHTREE, ASYLUM_ZENITH,
+	ASYLUM_TSARBOMB, ASYLUM_BLACKHOLE, ASYLUM_JUDGE,
+	ASYLUM_TRAIN, ASYLUM_JUMPSCARE, ASYLUM_MOYAI,
+	ASYLUM_MICROPHONE,
+	ASYLUM_MASTERSPARK,
+	ASYLUM_THEWORLD,
 	NUM_ASYLUM_ITEMS
 };
 
@@ -42,10 +49,14 @@ struct SAsylumItem
 	int m_DelayMs;
 	float m_Force;
 	int m_Category;
+	// Left out (false) in ordinary rows. No "= false": GCC builds as C++11,
+	// where a default member initializer stops the table being an aggregate.
+	bool m_God;
 };
 
 const SAsylumItem &AsylumItem(int Item);
-int AsylumRandomItem(int Category);
+// Picks from the god-tier pool when God is set, otherwise from the ordinary one.
+int AsylumRandomItem(int Category, bool God = false);
 int AsylumWeaponID(int Item);
 bool AsylumIsWeapon(int WeaponID);
 int AsylumUpgradeKills(int Item);
@@ -76,6 +87,10 @@ class CAsylumWeapon : public CWeapon
 	static bool BlasterChargedHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 	int m_UltimateStartTick;
 	int m_UltimateShots;
+	int m_SlamTick;
+	int m_LastQuoteTick;
+	int m_Note;
+	int m_aMicrophoneIDs[6];
 	int m_MagazineSize;
 	int m_MagazineReloadMs;
 	int m_MagazineReloadEnd;
@@ -100,6 +115,14 @@ class CAsylumWeapon : public CWeapon
 	static bool GrenadeHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 	static bool LaserHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 
+	// ★ God-tier items, implemented in asylum_god.cpp.
+	bool FireGodItem(vec2 Direction);
+	void TickGodItem();
+	static bool TsarHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+	static bool JudgeHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+	static bool BlackholeLaserHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+	static bool LightningHit(class CLaser *pLaser, vec2 Pos, CCharacter *pHit, bool EndOfLife);
+
 public:
 	// Shared by the player weapon and the Boss's stateless AI attack adapter.
 	static constexpr int DARKHEART_DASH_DAMAGE = 45;
@@ -110,6 +133,9 @@ public:
 	static constexpr float DARKHEART_SPIN_RADIUS = 100.0f;
 	CAsylumWeapon(CCharacter *pOwner, int Item);
 	~CAsylumWeapon() override;
+	void Snap(int SnappingClient, int OtherMode) override;
+	bool IgnoreCooldown() override;
+	void ResetCooldowns();
 	int GetType() override { return AsylumItem(m_Item).m_Type; }
 	int NumAmmoIcons() override;
 	int Item() const { return m_Item; }
@@ -202,5 +228,17 @@ using CAsylumUpgradeSSG08 = CAsylumItem<ASYLUM_UPGRADE_SSG08>;
 using CAsylumMicroSMG = CAsylumItem<ASYLUM_MICROSMG>;
 using CAsylumSuppressedMAC10 = CAsylumItem<ASYLUM_SUPPRESSED_MAC10>;
 using CAsylumAWP = CAsylumItem<ASYLUM_AWP>;
+using CAsylumBanhammer = CAsylumItem<ASYLUM_BANHAMMER>;
+using CAsylumBirchTree = CAsylumItem<ASYLUM_BIRCHTREE>;
+using CAsylumZenith = CAsylumItem<ASYLUM_ZENITH>;
+using CAsylumTsarBomb = CAsylumItem<ASYLUM_TSARBOMB>;
+using CAsylumBlackhole = CAsylumItem<ASYLUM_BLACKHOLE>;
+using CAsylumJudge = CAsylumItem<ASYLUM_JUDGE>;
+using CAsylumTrain = CAsylumItem<ASYLUM_TRAIN>;
+using CAsylumJumpscare = CAsylumItem<ASYLUM_JUMPSCARE>;
+using CAsylumMoyai = CAsylumItem<ASYLUM_MOYAI>;
+using CAsylumMicrophone = CAsylumItem<ASYLUM_MICROPHONE>;
+using CAsylumMasterSpark = CAsylumItem<ASYLUM_MASTERSPARK>;
+using CAsylumTheWorld = CAsylumItem<ASYLUM_THEWORLD>;
 
 #endif

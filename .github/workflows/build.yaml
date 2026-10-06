@@ -57,6 +57,8 @@ jobs:
         cp package/*.cfg license.txt $dir/
         cp -r client-skins $dir/
         cp README.md $dir/
+        mkdir -p $dir/assets/asylum
+        cp assets/asylum/README.md $dir/assets/asylum/
         if [ "$RUNNER_OS" = Windows ]; then
           cp package/Start-TeeAsylum.cmd sqlite3.dll $dir/
         fi

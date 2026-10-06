@@ -2,7 +2,9 @@
 
 > 源码与本轮背包、普通装备、Boss 战扩展由 [101024awa](https://github.com/101024awa) 提供，[hoamwtVoment](https://github.com/hoamwtVoment) 整理上传。
 
-基于 DDNet-HunterN 的 Item Asylum 风格二维服务器，普通 DDNet 客户端即可连接。当前为 **36 件出生随机装备、5 个升级模块、5 件升级武器，总目录 46 项**；保留 FFA、TDM、GG、ELIM、ZS、JGN，新增默认大厅巡回 `asylum_tour` 和 **10 Hour Burst Man 两阶段 AI Boss**。
+因为101024不会用给特湖边，所以代码可能不是最新的。
+
+基于 DDNet-HunterN 的 Item Asylum 风格二维服务器，普通 DDNet 客户端即可连接。当前为 **36 件普通出生随机装备、5 个升级模块、5 件升级武器、12 件大神装备，总目录 58 项**；保留 FFA、TDM、GG、ELIM、ZS、JGN，支持默认大厅巡回 `asylum_tour` 和 **10 Hour Burst Man 两阶段 AI Boss**。
 
 ## 玩法
 
@@ -14,6 +16,36 @@
 - Boss 每名挑战者 6 命，生命随人数增加；半血后回满进入第二阶段，速度提高、承伤翻倍，并切换阶段音乐。
 
 Boss 第一阶段使用 Darkheart 三连冲刺、Twilight、Star Platinum、Vampirism 抓取拖拽和霰弹枪；第二阶段增加 Grand Volley、Strong Left。Boss 生命为 `2000 + 666 ×（人数−1）`，上限 11990，使用同一场地，不整体传送玩家。
+
+### 大神装备
+
+默认不会随机获得大神装备：`asylum_god_chance` 为 `0`，`asylum_god_only` 为 `0`。在 RCON 中设置对应房间：
+
+```text
+room_setting 0 asylum_god_chance 5
+room_setting 0 asylum_god_only 1
+```
+
+`chance` 支持 `0–100`，每个槽位独立按百分比抽取；`only 1` 优先于概率，只抽大神装备。全部关闭时将两项都设为 `0`。设置从下一次出生或重抽生效，不移除已持有的装备。大厅无武器，GG 和固定身份配装仍按各自规则。
+
+保留 main 的装备 ID `0–45`；旧大神分支的 `32–43` 调整为 `46–57`，已有测试命令和手写配装配置需要按新 ID 修改：
+
+| ID | 大神装备 |
+|---|---|
+| 46 | 封禁之锤 / Banhammer |
+| 47 | 白桦树 / Birch tree |
+| 48 | 天顶剑 / Zenith |
+| 49 | 沙皇炸弹 |
+| 50 | 黑洞射线枪 |
+| 51 | 审判 / Judge |
+| 52 | 失控列车 |
+| 53 | 惊吓 / Jumpscare |
+| 54 | 摩艾 / Moyai |
+| 55 | 动感星期五 / Microphone |
+| 56 | 恋符MasterSpark |
+| 57 | The World（ザ・ワールド） |
+
+巨石强森跳脸、BF 原声和 The World 录音保留；The World 的减速、暂停同时作用于 Boss AI 和它的弹幕。素材与效果说明见 [大神素材说明](assets/asylum/README.md)。
 
 ## 启动与配置
 
@@ -49,6 +81,21 @@ room_setting 0 asylum_map asylum_10hourburstman
 ```
 
 这些不是普通聊天命令。`asylum_give` 自动选择对应类别槽位；`asylum_inspect` 只读输出生命、护甲、四槽物品、充能和装填状态；`asylum_map` 仅限 room 0 切换全服物理地图。
+
+### 便携测试指令
+
+直接在 RCON 使用，自动定位目标玩家的房间，不用加 `room_setting`：
+
+```text
+asylum_test_nocd <CID> <0或1>
+asylum_test_reset_cd <CID>
+asylum_test_god <CID> <0或1>
+asylum_test_weapon <CID> <装备ID>
+asylum_test_loadout <CID> <近战ID> <远程ID> <特殊ID>
+asylum_test_items [CID]
+```
+
+分别用于无冷却、单次清空冷却、可被击中的锁血无敌、单件换装、三槽配装和查看装备 ID。无冷却不跳过技能前摇、持续时间、弹匣装填和 R 充能；管理员测试配装不受大神随机概率限制。`asylum_test_god` 保留命中、击退、冻结与时停效果，和 main 原有的 `asylum_god` 完全免伤模式分开。四槽模块与升级武器可通过 `asylum_test_weapon` 或 `asylum_give` 指定。
 
 ## 构建
 

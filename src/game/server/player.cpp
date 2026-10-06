@@ -16,6 +16,8 @@ IServer *CPlayer::Server() const { return m_pGameServer->Server(); }
 
 CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool AsSpec)
 {
+	m_AsylumNoCooldown = false;
+	m_AsylumTestGod = false;
 	m_pGameServer = pGameServer;
 	m_ClientID = ClientID;
 	m_Team = AsSpec ? TEAM_SPECTATORS : TEAM_RED; // controller will decide player's team again.
@@ -355,7 +357,7 @@ void CPlayer::Tick()
 
 	SGameInstance Instance = GameServer()->PlayerGameInstance(m_ClientID);
 
-	if(Instance.m_Init && !Instance.m_pController->IsGamePaused())
+	if(Instance.m_Init && !Instance.m_pController->IsGamePaused() && !Instance.m_pWorld->IsClientTimeStopped(m_ClientID))
 	{
 		if(!m_pCharacter && m_DieTick + Server()->TickSpeed() * 3 <= Server()->Tick() && !m_DeadSpecMode)
 			Respawn();
@@ -399,6 +401,9 @@ void CPlayer::Tick()
 		++m_JoinTick;
 		++m_LastActionTick;
 		++m_TeamChangeTick;
+		if(Instance.m_Init && Instance.m_pWorld->IsClientTimeStopped(m_ClientID) &&
+			m_pCharacter && m_pCharacter->IsAlive() && !m_Paused)
+			m_ViewPos = m_pCharacter->m_Pos;
 	}
 
 	m_TuneZoneOld = m_TuneZone; // determine needed tunings with viewpos
@@ -723,6 +728,14 @@ void CPlayer::OnDirectInput(CNetObj_PlayerInput *NewInput)
 
 void CPlayer::OnPredictedEarlyInput(CNetObj_PlayerInput *NewInput)
 {
+	if(GameWorld() && GameWorld()->IsClientTimeStopped(m_ClientID))
+	{
+		// Consume fire edges without firing or respawning while stopped.
+		m_LastFire = (NewInput->m_Fire & 1);
+		if(m_pCharacter)
+			m_pCharacter->OnDirectInput(NewInput);
+		return;
+	}
 	// skip the input if chat is active
 	if((m_PlayerFlags & PLAYERFLAG_CHATTING) && (NewInput->m_PlayerFlags & PLAYERFLAG_CHATTING))
 		return;
