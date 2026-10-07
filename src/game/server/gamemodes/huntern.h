@@ -141,6 +141,8 @@ private:
 	static void ConGojoStatus(IConsole::IResult *pResult, void *pUserData);
 	static void ConGojoEnergy(IConsole::IResult *pResult, void *pUserData);
 	static void ConInfCursedEnergy(IConsole::IResult *pResult, void *pUserData);
+	static void ConInfAmmo(IConsole::IResult *pResult, void *pUserData);
+	static void ConNoAttackInterval(IConsole::IResult *pResult, void *pUserData);
 	int m_aJumpscareStart[MAX_CLIENTS];
 	int m_aJumpscareUntil[MAX_CLIENTS];
 	int m_aUpgradeKills[MAX_CLIENTS][5];

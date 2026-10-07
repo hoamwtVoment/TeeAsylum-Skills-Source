@@ -144,11 +144,12 @@ int AsylumRangedDamage(int Item, float Range, bool Head, bool Limb)
 
 CAsylumWeapon::CAsylumWeapon(CCharacter *pOwner, int Item) : CWeapon(pOwner), m_Item(Item), m_MantleCharges(0),
 	m_Charge(0), m_ENextTick(0), m_RNextTick(Item == ASYLUM_LILYNETTE ? pOwner->Server()->Tick() + pOwner->Server()->TickSpeed() * 17 : 0),
-	m_CounterUntil(0), m_UltimateStartTick(-1), m_UltimateShots(0), m_SlamTick(-1), m_LastQuoteTick(-1000000), m_Note(0), m_MagazineSize(0),
+	m_CounterUntil(0), m_UltimateStartTick(-1), m_UltimateShots(0), m_aSlamTicks{}, m_LastQuoteTick(-1000000), m_Note(0), m_MagazineSize(0),
 	m_MagazineReloadMs(0), m_MagazineReloadEnd(0), m_ShellReload(false), m_DarkheartSpinEnd(0), m_DarkheartNextHit(0),
 	m_DashEnd(0), m_DashDirection(0, 0), m_DashLastPos(0, 0), m_aDashHit{}, m_SpeedBoostEnd(0), m_SpeedBoostType(0)
 {
 	m_MaxAmmo = m_Ammo = -1;
+	for(int &Tick : m_aSlamTicks) Tick = -1;
 	m_FireDelay = AsylumItem(Item).m_DelayMs;
 	m_FullAuto = AsylumItem(Item).m_Category != ASYLUM_CATEGORY_UTILITY;
 	if(Item == ASYLUM_THEWORLD)
@@ -762,6 +763,12 @@ void CAsylumWeapon::FireUltimateArea()
 void CAsylumWeapon::Tick()
 {
 	CWeapon::Tick();
+	if(InfiniteAmmo() && m_MagazineSize > 0)
+	{
+		m_Ammo = m_MagazineSize;
+		m_MagazineReloadEnd = 0;
+		m_ReloadTimer = 0;
+	}
 	if(m_Item == ASYLUM_THEWORLD)
 		m_ReloadTimer = ((CGameControllerHunterN *)Character()->Controller())->TheWorldCooldown(Character()->GetPlayer()->GetCID());
 	TickGodItem();
@@ -894,7 +901,7 @@ void CAsylumWeapon::TickPaused()
 	if(m_CounterUntil > 0) ++m_CounterUntil;
 	if(m_CounterPhaseEnd > 0) ++m_CounterPhaseEnd;
 	if(m_UltimateStartTick >= 0) ++m_UltimateStartTick;
-	if(m_SlamTick >= 0) ++m_SlamTick;
+	for(int &SlamTick : m_aSlamTicks) if(SlamTick >= 0) ++SlamTick;
 	if(m_MagazineReloadEnd > 0) ++m_MagazineReloadEnd;
 	if(m_DarkheartSpinEnd > 0) ++m_DarkheartSpinEnd;
 	if(m_DarkheartNextHit > 0) ++m_DarkheartNextHit;

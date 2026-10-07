@@ -79,8 +79,10 @@ public:
 	void SetEmptyReloadPenalty(int Penalty) { m_EmptyReloadPenalty = Penalty; }
 
 	int GetAttackTick() { return m_AttackTick; }
-	bool IsReloading() { return m_ReloadTimer != 0 && !IgnoreCooldown(); };
+	bool IsReloading() { return m_ReloadTimer != 0 && !IgnoreCooldown() && !IgnoreAttackInterval(); };
 	virtual bool IgnoreCooldown() { return false; }
+	virtual bool IgnoreAttackInterval();
+	virtual bool InfiniteAmmo();
 	void Reload() { m_ReloadTimer = 0; };
 
 	void SetTypeID(int Type) { m_WeaponTypeID = Type; }

@@ -1,5 +1,8 @@
 #include "weapon.h"
 
+bool CWeapon::IgnoreAttackInterval() { return Character()->GetPlayer()->m_AsylumNoAttackInterval; }
+bool CWeapon::InfiniteAmmo() { return Character()->GetPlayer()->m_AsylumInfAmmo; }
+
 CWeapon::CWeapon(CCharacter *pOwnerChar)
 {
 	m_pOwnerChar = pOwnerChar;
@@ -24,6 +27,11 @@ void CWeapon::Tick()
 {
 	if(IgnoreCooldown())
 		m_ReloadTimer = 0;
+	if(InfiniteAmmo() && m_Ammo >= 0)
+	{
+		m_Ammo = m_MaxAmmo > 0 ? m_MaxAmmo : 1;
+		m_ReloadTimer = 0;
+	}
 	if(m_ReloadTimer > 0)
 	{
 		m_ReloadTimer--;
@@ -63,10 +71,12 @@ void CWeapon::HandleFire(vec2 Direction)
 {
 	if(GameWorld()->IsClientFullyTimeStopped(Character()->GetPlayer()->GetCID()))
 		return;
-	if(m_ReloadTimer > 0 && !IgnoreCooldown())
+	if(m_ReloadTimer > 0 && !IgnoreCooldown() && !IgnoreAttackInterval())
 		return;
-	if(IgnoreCooldown())
+	if(IgnoreCooldown() || IgnoreAttackInterval())
 		m_ReloadTimer = 0;
+	if(InfiniteAmmo() && m_Ammo >= 0)
+		m_Ammo = m_MaxAmmo > 0 ? m_MaxAmmo : 1;
 
 	if(m_Ammo == 0)
 	{
@@ -97,10 +107,10 @@ void CWeapon::HandleFire(vec2 Direction)
 		m_AmmoRegenStart = Server()->Tick() + (m_FireDelay + m_AmmoRegenDelay) * Server()->TickSpeed() / 1000;
 
 	m_AttackTick = Server()->Tick();
-	if(m_Ammo > 0)
+	if(m_Ammo > 0 && !InfiniteAmmo())
 		m_Ammo -= 1;
 
-	if(IgnoreCooldown())
+	if(IgnoreCooldown() || IgnoreAttackInterval())
 		m_ReloadTimer = 0;
 	else if(m_ReloadTimer == 0)
 		m_ReloadTimer = m_FireDelay * Server()->TickSpeed() / 1000;

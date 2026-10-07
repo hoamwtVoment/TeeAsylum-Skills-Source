@@ -87,7 +87,7 @@ class CAsylumWeapon : public CWeapon
 	static bool BlasterChargedHit(class CProjectile *pProj, vec2 Pos, CCharacter *pHit, bool EndOfLife);
 	int m_UltimateStartTick;
 	int m_UltimateShots;
-	int m_SlamTick;
+	int m_aSlamTicks[8];
 	int m_LastQuoteTick;
 	int m_Note;
 	int m_aMicrophoneIDs[6];

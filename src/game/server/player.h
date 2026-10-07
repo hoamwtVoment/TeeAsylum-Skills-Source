@@ -47,6 +47,8 @@ public:
 	bool m_AsylumNoCooldown;
 	bool m_AsylumTestGod;
 	bool m_AsylumInfCursedEnergy;
+	bool m_AsylumInfAmmo;
+	bool m_AsylumNoAttackInterval;
 	CCharacter *ForceSpawn(vec2 Pos);
 	void SetTeam(int Team);
 	int GetTeam() const { return m_Team; };

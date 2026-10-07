@@ -101,6 +101,14 @@ bool CGameWorld::StartTimeStop(int Owner, int DurationTicks)
 	CCharacter *pOwner = m_pGameServer->GetPlayerChar(Owner);
 	if(m_Paused || !pOwner || !pOwner->IsAlive() || pOwner->GameWorld() != this)
 		return false;
+	if(m_TimeStop.Active(m_pServer->Tick()))
+	{
+		// The explicit attack-interval test switch is allowed to refresh the
+		// same owner's World while it is active. Normal gameplay remains guarded.
+		if(!pOwner->GetPlayer()->m_AsylumNoAttackInterval || m_TimeStop.Owner() != Owner)
+			return false;
+		m_TimeStop.Reset();
+	}
 	return m_TimeStop.Start(Owner, m_pServer->Tick(), DurationTicks,
 		ASYLUM_WORLD_WINDUP_MS * m_pServer->TickSpeed() / 1000,
 		ASYLUM_WORLD_AUDIO_LEAD_MS * m_pServer->TickSpeed() / 1000);

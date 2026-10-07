@@ -123,6 +123,42 @@ void CGameControllerHunterN::ConInfCursedEnergy(IConsole::IResult *pResult, void
 	if(pSelf->m_aGojo[CID].m_Enabled) pSelf->SendGojoLoadout(CID, false);
 }
 
+void CGameControllerHunterN::ConInfAmmo(IConsole::IResult *pResult, void *pUserData)
+{
+	auto *pSelf = static_cast<CGameControllerHunterN *>(pUserData);
+	if(!pSelf->RequireAdmin(pResult)) return;
+	const int CID = pResult->GetInteger(0), Enabled = pResult->GetInteger(1);
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(!pPlayer || (Enabled != 0 && Enabled != 1))
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum_test", "Need a connected player; enabled must be 0 or 1");
+		return;
+	}
+	pPlayer->m_AsylumInfAmmo = Enabled != 0;
+	char aBuf[160];
+	str_format(aBuf, sizeof(aBuf), "CID %d: infinite ammo testing %s", CID, Enabled ? "enabled" : "disabled");
+	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum_test", aBuf);
+	pSelf->GameServer()->SendChatTarget(CID, Enabled ? "[测试] 无限弹药已开启：弹匣不消耗、不进入空弹装填。" : "[测试] 无限弹药已关闭。");
+}
+
+void CGameControllerHunterN::ConNoAttackInterval(IConsole::IResult *pResult, void *pUserData)
+{
+	auto *pSelf = static_cast<CGameControllerHunterN *>(pUserData);
+	if(!pSelf->RequireAdmin(pResult)) return;
+	const int CID = pResult->GetInteger(0), Enabled = pResult->GetInteger(1);
+	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? pSelf->GetPlayerIfInRoom(CID) : nullptr;
+	if(!pPlayer || (Enabled != 0 && Enabled != 1))
+	{
+		pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum_test", "Need a connected player; enabled must be 0 or 1");
+		return;
+	}
+	pPlayer->m_AsylumNoAttackInterval = Enabled != 0;
+	char aBuf[192];
+	str_format(aBuf, sizeof(aBuf), "CID %d: attack interval testing %s; Birch/MasterSpark/The World mutexes are also bypassed", CID, Enabled ? "disabled" : "normal");
+	pSelf->InstanceConsole()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "asylum_test", aBuf);
+	pSelf->GameServer()->SendChatTarget(CID, Enabled ? "[测试] 已取消攻击间隔：Birch tree、MasterSpark、The World 也允许连续释放。" : "[测试] 已恢复攻击间隔。");
+}
+
 void CGameControllerHunterN::SendGojoLoadout(int CID, bool Detailed)
 {
 	CPlayer *pPlayer = GetPlayerIfInRoom(CID);

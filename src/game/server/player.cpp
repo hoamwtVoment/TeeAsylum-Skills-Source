@@ -19,6 +19,8 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool AsSpec)
 	m_AsylumNoCooldown = false;
 	m_AsylumTestGod = false;
 	m_AsylumInfCursedEnergy = false;
+	m_AsylumInfAmmo = false;
+	m_AsylumNoAttackInterval = false;
 	m_pGameServer = pGameServer;
 	m_ClientID = ClientID;
 	m_Team = AsSpec ? TEAM_SPECTATORS : TEAM_RED; // controller will decide player's team again.

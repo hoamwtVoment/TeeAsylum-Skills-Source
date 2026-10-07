@@ -139,6 +139,8 @@ class CGameContext : public IGameServer
 	static void ConAsylumGojoStatus(IConsole::IResult *pResult, void *pUserData);
 	static void ConAsylumGojoEnergy(IConsole::IResult *pResult, void *pUserData);
 	static void ConAsylumTestInfCursedEnergy(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestInfAmmo(IConsole::IResult *pResult, void *pUserData);
+	static void ConAsylumTestNoAttackInterval(IConsole::IResult *pResult, void *pUserData);
 
 	// HunterN commands
 	static void ConSetClass(IConsole::IResult *pResult, void *pUserData);

@@ -2918,6 +2918,16 @@ void CGameContext::ConAsylumTestInfCursedEnergy(IConsole::IResult *pResult, void
 	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_inf_cursedenergy");
 }
 
+void CGameContext::ConAsylumTestInfAmmo(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_inf_ammo");
+}
+
+void CGameContext::ConAsylumTestNoAttackInterval(IConsole::IResult *pResult, void *pUserData)
+{
+	static_cast<CGameContext *>(pUserData)->ForwardAsylumTest(pResult, "asylum_test_noattackinterval");
+}
+
 void CGameContext::OnConsoleInit()
 {
 	m_pServer = Kernel()->RequestInterface<IServer>();
@@ -2968,6 +2978,8 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("asylum_gojo_status", "i[cid]", CFGFLAG_SERVER, ConAsylumGojoStatus, this, "Administrator: inspect Gojo identity, five cooldowns and domain effects");
 	Console()->Register("asylum_gojo_energy", "i[cid] i[amount]", CFGFLAG_SERVER, ConAsylumGojoEnergy, this, "Administrator: set Gojo cursed energy (0-200); room is automatic");
 	Console()->Register("asylum_test_inf_cursedenergy", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumTestInfCursedEnergy, this, "Test: toggle infinite cursed energy AND Infinity (0/1); target room is automatic");
+	Console()->Register("asylum_test_inf_ammo", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumTestInfAmmo, this, "Test: toggle infinite ammo without bypassing attack intervals (0/1)");
+	Console()->Register("asylum_test_noattackinterval", "i[cid] i[enabled]", CFGFLAG_SERVER, ConAsylumTestNoAttackInterval, this, "Test: cancel generic attack intervals; special abilities may overlap (0/1)");
 
 	Console()->Chain("sv_motd", ConchainSpecialMotdupdate, this);
 	Console()->Chain("sv_room", ConchainUpdateRoomVotes, this);

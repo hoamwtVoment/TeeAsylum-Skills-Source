@@ -83,6 +83,8 @@ CGameControllerHunterN::CGameControllerHunterN(int Mode) : IGameController(),
 	InstanceConsole()->Register("asylum_gojo_status", "i[cid]", CFGFLAG_INSTANCE, ConGojoStatus, this, "Administrator: inspect Gojo identity and effects");
 	InstanceConsole()->Register("asylum_gojo_energy", "i[cid] i[amount]", CFGFLAG_INSTANCE, ConGojoEnergy, this, "Administrator: set cursed energy (0-200) for an enabled Gojo");
 	InstanceConsole()->Register("asylum_test_inf_cursedenergy", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConInfCursedEnergy, this, "Administrator test: infinite cursed energy and Infinity (0/1), no cooldown/windup bypass");
+	InstanceConsole()->Register("asylum_test_inf_ammo", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConInfAmmo, this, "Administrator test: infinite ammo (0/1)");
+	InstanceConsole()->Register("asylum_test_noattackinterval", "i[cid] i[enabled]", CFGFLAG_INSTANCE, ConNoAttackInterval, this, "Administrator test: cancel attack interval, including special weapon release mutexes (0/1)");
 }
 
 void CGameControllerHunterN::ConStatus(IConsole::IResult *pResult, void *pUserData)
@@ -875,7 +877,7 @@ bool CGameControllerHunterN::ActivateTheWorld(int CID)
 	CPlayer *pPlayer = CID >= 0 && CID < MAX_CLIENTS ? GetPlayerIfInRoom(CID) : nullptr;
 	CCharacter *pChr = pPlayer ? pPlayer->GetCharacter() : nullptr;
 	if(!pChr || !pChr->IsAlive() || pChr->IsFrozen() || pChr->IsDisabled() ||
-		TheWorldCooldown(CID) > 0 || (!IsGameRunning() && !IsWarmup()) ||
+		(TheWorldCooldown(CID) > 0 && !pPlayer->m_AsylumNoAttackInterval) || (!IsGameRunning() && !IsWarmup()) ||
 		!GameWorld()->StartTimeStop(CID, ASYLUM_WORLD_SECONDS * Server()->TickSpeed()))
 		return false;
 	if(pPlayer->m_AsylumNoCooldown)

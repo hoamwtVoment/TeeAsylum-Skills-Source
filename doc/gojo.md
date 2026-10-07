@@ -83,10 +83,27 @@ asylum_test_reset_cd <CID>
 asylum_test_god <CID> 1
 asylum_test_inf_cursedenergy <CID> 1
 asylum_test_inf_cursedenergy <CID> 0
+asylum_test_inf_ammo <CID> <0或1>
+asylum_test_noattackinterval <CID> <0或1>
 ```
 
 无 CD 不跳过蓄力、咏唱、领域持续时间，也不允许同类实体无限叠加。关闭五条悟身份后才能用普通配装指令替换装备。
 
 `asylum_test_inf_cursedenergy` 同时开关无限咒力和无限“无限”屏障值，直接在 RCON 使用，不加 `room_setting`。开启时补满并保持咒力 200、无限 100，施术、屏障挡伤和额外踏空不消耗它们；不跳过冷却、最低蓄力、领域/冻结等状态限制，也不让无限在施术时无条件挡伤。可以先给玩家开测试标记，再变身五条悟；死亡、重生和换房后保留，断开重连恢复关闭。关闭后后续使用恢复正常消耗。
+
+`asylum_test_inf_ammo` 只对普通武器的弹药/弹匣生效：弹匣保持满、不触发空弹装填，但不取消普通攻击间隔。
+
+`asylum_test_noattackinterval` 取消通用攻击间隔，可让普通装备连续开火，也会允许 Birch tree、MasterSpark、The World 连续尝试释放；它不跳过 Birch tree 的蓄力落点、MasterSpark 的引导持续时间、The World 的实际时停持续时间，也不改变无量空处/Gojo 技能最低蓄力。关闭后恢复原本限制。
+
+大神测试开关同样直接可用：
+
+```text
+asylum_test_inf_ammo <CID> 1
+asylum_test_inf_ammo <CID> 0
+asylum_test_noattackinterval <CID> 1
+asylum_test_noattackinterval <CID> 0
+```
+
+也可写成 `room_setting <房间ID> ...`。`inf_ammo` 只补满弹匣、不取消攻击间隔；`noattackinterval` 才取消通用间隔，并允许 Birch tree 多个蓄力落点、MasterSpark 多条引导光束、The World 在活动中刷新。两者互不自动开启。
 
 按用户要求，本轮只编译，不启动服务器，不执行联机/玩法测试。

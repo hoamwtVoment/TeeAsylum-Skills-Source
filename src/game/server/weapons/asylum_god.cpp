@@ -91,10 +91,16 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 		return true;
 	}
 	case ASYLUM_BIRCHTREE:
-		if(IgnoreCooldown() && m_SlamTick >= 0)
-			return true; // No-cooldown tests must not perpetually restart the wind-up.
+	{
+		int SlamSlot = -1;
+		for(int i = 0; i < 8; ++i)
+		{
+			if(m_aSlamTicks[i] >= 0 && !IgnoreCooldown() && !IgnoreAttackInterval()) return true;
+			if(m_aSlamTicks[i] < 0 && SlamSlot < 0) SlamSlot = i;
+		}
+		if(SlamSlot < 0) return true;
 		// The slam lands in TickGodItem after the tree has said its piece.
-		m_SlamTick = Server()->Tick() + Server()->TickSpeed() * 4 / 5;
+		m_aSlamTicks[SlamSlot] = Server()->Tick() + Server()->TickSpeed() * 4 / 5;
 		AsylumPlayMeme(GameWorld(), ASYLUM_MEME_RUSTLE, Pos());
 		GameWorld()->CreatePlayerSpawn(Pos());
 		// Quote at most every 8 seconds so holding fire does not flood the chat.
@@ -107,6 +113,7 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 			AsylumShowText(GameWorld(), Pos() - vec2(0.0f, 90.0f), "I LOVE TREES", 1.5f);
 		}
 		return true;
+	}
 	case ASYLUM_ZENITH:
 		AsylumSpawnBladeStorm(GameWorld(), CID, GetWeaponID(), Pos(), Pos() + Direction * 380.0f, Item.m_Damage);
 		AsylumPlayMeme(GameWorld(), ASYLUM_MEME_SHING, Pos());
@@ -194,9 +201,10 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 		return true;
 	}
 	case ASYLUM_MASTERSPARK:
-		for(CEntity *pEntity = GameWorld()->FindFirst(CGameWorld::ENTTYPE_ASYLUM_SPARK); pEntity; pEntity = pEntity->TypeNext())
-			if(static_cast<CMasterSpark *>(pEntity)->IsCasting(CID, GetWeaponID()))
-				return true; // No cooldown does not mean overlapping channelled beams.
+		if(!IgnoreAttackInterval())
+			for(CEntity *pEntity = GameWorld()->FindFirst(CGameWorld::ENTTYPE_ASYLUM_SPARK); pEntity; pEntity = pEntity->TypeNext())
+				if(static_cast<CMasterSpark *>(pEntity)->IsCasting(CID, GetWeaponID()))
+					return true;
 		new CMasterSpark(GameWorld(), CID, GetWeaponID(), Pos(), Direction, Item.m_Damage);
 		AsylumShowText(GameWorld(), Pos() - vec2(0.0f, 90.0f), "MASTER SPARK", 0.6f);
 		GameWorld()->CreateSound(Pos(), SOUND_LASER_FIRE);
@@ -214,11 +222,16 @@ bool CAsylumWeapon::FireGodItem(vec2 Direction)
 
 void CAsylumWeapon::TickGodItem()
 {
-	if(m_Item != ASYLUM_BIRCHTREE || m_SlamTick < 0 || Server()->Tick() < m_SlamTick)
+	if(m_Item != ASYLUM_BIRCHTREE)
 		return;
+	int SlamSlot = -1;
+	for(int i = 0; i < 8; ++i)
+		if(m_aSlamTicks[i] >= 0 && Server()->Tick() >= m_aSlamTicks[i]) { SlamSlot = i; break; }
+	if(SlamSlot < 0) return;
+	const int SlamTick = m_aSlamTicks[SlamSlot];
+	m_aSlamTicks[SlamSlot] = -1;
 	// A slam that is late (weapon was not ticking) or interrupted is dropped.
-	const bool Stale = Server()->Tick() - m_SlamTick > 2;
-	m_SlamTick = -1;
+	const bool Stale = Server()->Tick() - SlamTick > 2;
 	if(Stale || Character()->CurrentWeapon() != this || Character()->IsFrozen())
 		return;
 	const SAsylumItem &Item = AsylumItem(m_Item);

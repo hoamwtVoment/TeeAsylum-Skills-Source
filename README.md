@@ -64,6 +64,8 @@ asylum_gojo_energy <CID> <0–200>
 
 最低蓄力为苍/赫 0.5 秒、茈 1 秒，点按取消；苍赫合成也与主动茈共享冷却。测试无限咒力及无限“无限”用 `asylum_test_inf_cursedenergy <CID> <0或1>`，不会跳过蓄力或冷却。
 
+大神武器测试开关：`asylum_test_inf_ammo <CID> <0或1>`（无限弹匣，不取消攻击间隔）；`asylum_test_noattackinterval <CID> <0或1>`（取消通用攻击间隔，并允许 Birch tree、MasterSpark、The World 连续尝试，不跳过持续时间/蓄力）。两者都可直接 RCON 使用，或通过 `room_setting <房间ID> ...` 使用。
+
 默认大厅没有武器，需要先切到战斗图；GG、感染者和 JGN 巨人保留固定身份限制。当前只做管理员可调用身份，未接任何随机掉落、奖励或模式自动变身。具体操作与初版数值见 [五条悟说明](doc/gojo.md)。
 
 ## 启动与配置
